@@ -38,10 +38,10 @@ The handshake involves the following X25519 shared secrets:
 
 Those shared secrets are used to derive the following keys:
 
-- _K1:_ HChacha20(ee, 0)
-- _K2:_ HChacha20(es, 1) XOR K1
-- _K3:_ HChacha20(se, 2) XOR K2
-- _Ks:_ HChacha20(K3, 0)
+- _K1:_ HChacha20(ee)
+- _K2:_ HChacha20(es) XOR K1
+- _K3:_ HChacha20(se) XOR K2
+- _Ks:_ Chacha20_stream(K3) (bytes 32 to 63)
 
 The contents of the messages are:
 
@@ -53,11 +53,11 @@ The contents of the messages are:
 
 The authentication tags T2 and T3 are constructed thus:
 
-    T2 = Poly1305(K2, Es || Er)
-    T3 = Poly1305(K3, Es || Er || Chacha20(K2, Ls))
+    T2 = Poly1305(Chach20_stream(K2), Es || Er)
+    T3 = Poly1305(Chach20_stream(K3), Es || Er || Chacha20(K2, Ls))
 
-(They basically authenticate the transcript of the handshake, minus the
-authentication tags themselves.)
+(We use the first 32 bytes of the Chacha20 stream, with nonce 0.  Note
+that the authentication of the second message is not authenticated. )
 
 The handshake aborts if the sender gets an invalid tag T2, or if the
 recipient gets an invalid tag T3. Otherwise, the handshake succeeds, and
@@ -76,24 +76,11 @@ _Why HChacha20 instead of a real Hash like Blake2b?_ The idea is to
 minimise the code necessary to setup and use the secure channel (less
 code means smaller programs and less strain for the instruction cache).
 Users are expected to use Chacha20/Poly1305, anyway, we might as well
-use them to perform the handshake.
+use them to perform the handshake. As a bonus, it also leverages the
+`crypto_key_exchange()` API.
 
-_What's up with using Poly1305 with the keys?_ Indeed, Poly1305 is a one
-time authenticator. Using it twice with the same key instantly reveals
-the key, so it is generally a very bad idea to use keys directly. K2 and
-K3 however are thrown away when the handshake is done, so Poly1305 is
-guaranteed to be used only once per key.
-
-_Why is K3 hashed into Ks?_  While we could in principle use K3 as the
-session key, Poly1305 has already been used once with it.  Users unaware
-of the internals of the handshake, yet aware of the fact they can get
-away with using Poly1305 once on a key, might be tempted to use it on
-K3, without realising their use would be the _second_ one.  Better be
-safe and provide a clean key.
-
-An alternative would be to derive the authentication keys from K2 and K3
-(using HChacha20), and use K3 as the session key.  This would spend an
-additional run of HChacha20, and would ensure that no key is used for
-both authentication and encryption.  We might need to switch to this
-design if it turns out the keys used with Poly1305 are potentially
-compromised after a single run (even if only partially compromise).
+_Why is K3 hashed into Ks?_ To avoid nonce reuse.  K3 is used to
+authenticate the last message with nonce 0 and counter 0, which the user
+might reuse by accident. We could change those values, but it is simpler
+to just provide an untainted key.  The cost is negligible anyway, since
+a Chacha block can hold both an authentication key and a derived key.
