@@ -74,7 +74,7 @@ static int handshake_verify_buf(crypto_handshake_ctx *ctx, u8 block[64],
 static int handshake_verify(crypto_handshake_ctx *ctx, const u8 mac[16])
 {
     u8 block[64];
-    int mismatch handshake_verify_buf(ctx, block, mac);
+    int mismatch = handshake_verify_buf(ctx, block, mac);
     WIPE_BUFFER(block);
     return mismatch;
 }
@@ -84,7 +84,7 @@ static void handshake_init(crypto_handshake_ctx *ctx,
                            const u8              local_sk  [32])
 {
     copy32(ctx->key         , zero       );
-    copy32(ctx->remote_pk   , remote_pk  );
+    copy32(ctx->local_sk    , local_sk   );
     copy32(ctx->ephemeral_sk, random_seed);
     ctx->transcript_size = 0;
 }
@@ -99,11 +99,11 @@ void crypto_handshake_request(crypto_handshake_ctx *ctx,
     // Init context
     handshake_init(ctx, random_seed, local_sk);
     copy32(ctx->remote_pk, remote_pk); // recipient's public key is known
-    if (local_pk == 0) crypto_key_exchange_public_key(ctx->local_pk, local_pk);
+    if (local_pk == 0) crypto_key_exchange_public_key(ctx->local_pk, local_sk);
     else               copy32                        (ctx->local_pk, local_pk);
 
     // Send request
-    crypto_key_exchange_public_key(msg1, random_seed);
+    crypto_key_exchange_public_key(msg1, ctx->ephemeral_sk);
     handshake_record(ctx, msg1);
 }
 
@@ -125,7 +125,7 @@ void crypto_handshake_respond(crypto_handshake_ctx *ctx,
     handshake_update_key(ctx, ctx->local_sk   , ephemeral_pk);
 
     // Send & authenticate response
-    crypto_key_exchange_public_key(msg2, random_seed);
+    crypto_key_exchange_public_key(msg2, ctx->ephemeral_sk);
     handshake_record(ctx, msg2);
     handshake_auth(ctx, msg2 + 32); // tag is not in the transcript
 }
@@ -176,7 +176,7 @@ int crypto_handshake_accept(crypto_handshake_ctx *ctx,
 
     // Verify sender, get session key
     u8 block[64];
-    if (handshake_verify_buf(ctx, block, msg2 + 32)) {
+    if (handshake_verify_buf(ctx, block, msg3 + 32)) {
         WIPE_BUFFER(block);
         return -1;
     }
