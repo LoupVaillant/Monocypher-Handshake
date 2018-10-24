@@ -25,8 +25,8 @@ static void encrypt32(u8 out[32], const u8 in[32], const u8 key[32])
 }
 
 static handshake_update_key(crypto_handshake_ctx *ctx,
-                  const u8              secret_key[32],
-                  const u8              public_key[32])
+                            const u8              secret_key[32],
+                            const u8              public_key[32])
 {
     u8 new_key[32];
     crypto_key_exchange(new_key, secret_key, public_key);
@@ -43,7 +43,7 @@ static int handshake_record(crypto_handshake_ctx *ctx, u8 msg[32])
 }
 
 static void handshake_auth_buf(crypto_handshake_ctx *ctx, u8 block[64],
-                              u8 mac[16])
+                               u8 mac[16])
 {
     // block = auth_key || derived_key
     crypto_chacha_ctx ctx;
@@ -62,7 +62,7 @@ static void handshake_auth(crypto_handshake_ctx *ctx, u8 mac[16])
 }
 
 static int handshake_verify_buf(crypto_handshake_ctx *ctx, u8 block[64],
-                               const u8 mac[16])
+                                const u8 mac[16])
 {
     u8 real_mac[16];
     handshake_auth_buf(ctx, block, real_mac);
@@ -122,7 +122,7 @@ void crypto_handshake_respond(crypto_handshake_ctx *ctx,
     // Update key
     u8 *ephemeral_pk = ctx->transcript;
     handshake_update_key(ctx, ctx->ephemeral_sk, ephemeral_pk);
-    handshake_update_key(ctx, ctx->local_sk   , ephemeral_pk);
+    handshake_update_key(ctx, ctx->local_sk    , ephemeral_pk);
 
     // Send & authenticate response
     crypto_key_exchange_public_key(msg2, ctx->ephemeral_sk);
