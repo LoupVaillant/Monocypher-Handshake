@@ -138,7 +138,7 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
     // Update key
     u8 *ephemeral_pk = ctx->transcript + 32;
     handshake_update_key(ctx, ctx->ephemeral_sk, ephemeral_pk);
-    handshake_update_key(ctx, ctx->local_sk    , ephemeral_pk);
+    handshake_update_key(ctx, ctx->ephemeral_sk, remote_pk   );
 
     // Receive & verify response
     handshake_record(ctx, msg2);
@@ -147,7 +147,7 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
     }
 
     // Update key (again)
-    handshake_update_key(ctx, ctx->ephemeral_sk, ctx->remote_pk);
+    handshake_update_key(ctx, ctx->local_sk, ctx->ephemeral_pk);
 
     // Send & authenticate confirmation, get session key
     u8 block[64];
