@@ -8,7 +8,7 @@ CFLAGS= -pedantic -Wall -Wextra -O3 -march=native -g
 all: handshake.o
 
 clean:
-	rm *.out *.o
+	rm -rf *.out *.o
 
 handshake.o: handshake.c handshake.h
 	$(CC) $(CFLAGS) -c -o $@ $< \
