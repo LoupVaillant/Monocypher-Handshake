@@ -1,5 +1,5 @@
+#include <monocypher.h>
 #include "handshake.h"
-#include <stddef.h>
 
 #define FOR(i, start, end)   for (size_t (i) = (start); (i) < (end); (i)++)
 #define WIPE_CTX(ctx)        crypto_wipe(ctx   , sizeof(*(ctx)))
@@ -9,7 +9,7 @@ typedef uint8_t u8;
 
 static const u8 zero[32] = {0};
 
-static int copy32(u8 out[32], u8 in[32])
+static void copy32(u8 out[32], const u8 in[32])
 {
     FOR (i, 0, 32) {
         out[i] = in[i];
@@ -24,9 +24,9 @@ static void encrypt32(u8 out[32], const u8 in[32], const u8 key[32])
     WIPE_CTX(&ctx);
 }
 
-static handshake_update_key(crypto_handshake_ctx *ctx,
-                            const u8              secret_key[32],
-                            const u8              public_key[32])
+static void handshake_update_key(crypto_handshake_ctx *ctx,
+                                 const u8              secret_key[32],
+                                 const u8              public_key[32])
 {
     u8 new_key[32];
     crypto_key_exchange(new_key, secret_key, public_key);
@@ -36,7 +36,7 @@ static handshake_update_key(crypto_handshake_ctx *ctx,
     WIPE_BUFFER(new_key);
 }
 
-static int handshake_record(crypto_handshake_ctx *ctx, u8 msg[32])
+static void handshake_record(crypto_handshake_ctx *ctx, const u8 msg[32])
 {
     copy32(ctx->transcript + ctx->transcript_size, msg);
     ctx->transcript_size += 32;
@@ -46,9 +46,9 @@ static void handshake_auth_buf(crypto_handshake_ctx *ctx, u8 block[64],
                                u8 mac[16])
 {
     // block = auth_key || derived_key
-    crypto_chacha_ctx ctx;
-    crypto_chacha20_init  (&ctx, ctx->key, zero);
-    crypto_chacha20_stream(&ctx, block, 64);
+    crypto_chacha_ctx chacha_ctx;
+    crypto_chacha20_init  (&chacha_ctx, ctx->key, zero);
+    crypto_chacha20_stream(&chacha_ctx, block, 64);
     WIPE_CTX(&ctx);
     // use the authentication key of the block
     crypto_poly1305(mac, ctx->transcript, ctx->transcript_size, block);
@@ -136,7 +136,7 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
                              const u8              msg2       [48])
 {
     // Update key
-    u8 *ephemeral_pk = msg2;
+    const u8 *ephemeral_pk = msg2;
     handshake_update_key(ctx, ctx->ephemeral_sk, ephemeral_pk  );
     handshake_update_key(ctx, ctx->ephemeral_sk, ctx->remote_pk);
 
@@ -148,7 +148,7 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
     }
 
     // Update key (again)
-    handshake_update_key(ctx, ctx->local_sk, ctx->ephemeral_pk);
+    handshake_update_key(ctx, ctx->local_sk, ephemeral_pk);
 
     // Send & authenticate confirmation, get session key
     u8 block[64];
