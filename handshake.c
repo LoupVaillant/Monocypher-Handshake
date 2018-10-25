@@ -136,13 +136,14 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
                              const u8              msg2       [48])
 {
     // Update key
-    u8 *ephemeral_pk = ctx->transcript + 32;
-    handshake_update_key(ctx, ctx->ephemeral_sk, ephemeral_pk);
-    handshake_update_key(ctx, ctx->ephemeral_sk, remote_pk   );
+    u8 *ephemeral_pk = msg2;
+    handshake_update_key(ctx, ctx->ephemeral_sk, ephemeral_pk  );
+    handshake_update_key(ctx, ctx->ephemeral_sk, ctx->remote_pk);
 
     // Receive & verify response
     handshake_record(ctx, msg2);
     if (handshake_verify(ctx, msg2 + 32)) {
+        WIPE_CTX(ctx);
         return -1;
     }
 
@@ -167,23 +168,29 @@ int crypto_handshake_accept(crypto_handshake_ctx *ctx,
                             u8                    remote_pk  [32],
                             const u8              msg3       [48])
 {
+    u8 tmp_remote_pk[32]; // don't touch remote_pk before we're sure
+
     // Receive & decrypt confirmation
     handshake_record(ctx, msg3);
-    encrypt32(remote_pk, msg3, ctx->key);
+    encrypt32(tmp_remote_pk, msg3, ctx->key);
 
     // Update key
-    handshake_update_key(ctx, ctx->ephemeral_sk, remote_pk);
+    handshake_update_key(ctx, ctx->ephemeral_sk, tmp_remote_pk);
 
     // Verify sender, get session key
     u8 block[64];
     if (handshake_verify_buf(ctx, block, msg3 + 32)) {
+        WIPE_BUFFER(tmp_remote_pk);
         WIPE_BUFFER(block);
+        WIPE_CTX(ctx);
         return -1;
     }
     copy32(session_key, block + 32);
+    copy32(remote_pk  , tmp_remote_pk);
 
     // Clean up
     WIPE_BUFFER(block);
+    WIPE_BUFFER(tmp_remote_pk);
     WIPE_CTX(ctx);
     return 0;
 }
