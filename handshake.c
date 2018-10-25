@@ -49,7 +49,7 @@ static void handshake_auth_buf(crypto_handshake_ctx *ctx, u8 block[64],
     crypto_chacha_ctx chacha_ctx;
     crypto_chacha20_init  (&chacha_ctx, ctx->key, zero);
     crypto_chacha20_stream(&chacha_ctx, block, 64);
-    WIPE_CTX(&ctx);
+    WIPE_CTX(&chacha_ctx);
     // use the authentication key of the block
     crypto_poly1305(mac, ctx->transcript, ctx->transcript_size, block);
 }
@@ -147,13 +147,13 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
         return -1;
     }
 
-    // Update key (again)
-    handshake_update_key(ctx, ctx->local_sk, ephemeral_pk);
-
-    // Send & authenticate confirmation, get session key
+    // Send confirmation, get session key
     u8 block[64];
     encrypt32(msg3, ctx->local_pk, ctx->key);
     handshake_record(ctx, msg3);
+
+    // Update key & authanticate confirmation
+    handshake_update_key(ctx, ctx->local_sk, ephemeral_pk);
     handshake_auth_buf(ctx, block, msg3 + 32);
     copy32(session_key, block + 32);
 
