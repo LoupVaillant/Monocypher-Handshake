@@ -194,3 +194,75 @@ int crypto_handshake_accept(crypto_handshake_ctx *ctx,
     WIPE_CTX(ctx);
     return 0;
 }
+
+void crypto_send(u8       session_key[32],
+                 u8       msg        [80],
+                 const u8 random_seed[32],
+                 const u8 remote_pk  [32],
+                 const u8 local_sk   [32],
+                 const u8 local_pk   [32])
+{
+    // Init context
+    crypto_handshake_ctx ctx;
+    handshake_init(&ctx, random_seed, local_sk);
+    if (local_pk == 0) crypto_key_exchange_public_key(ctx.local_pk, local_sk);
+    else               copy32                        (ctx.local_pk, local_pk);
+
+    // Send ephemeral key
+    crypto_key_exchange_public_key(msg, random_seed);
+    handshake_record(&ctx, msg);
+    handshake_update_key(&ctx, ctx.ephemeral_sk, remote_pk);
+
+    // Send long term key
+    encrypt32(msg + 32, ctx.local_pk, ctx.key);
+    handshake_record(&ctx, msg + 32);
+    handshake_update_key(&ctx, ctx.local_sk, remote_pk);
+
+    // Authenticate message, get session key
+    u8 block[64];
+    handshake_auth_buf(&ctx, block, msg + 64);
+    copy32(session_key, block + 32);
+
+    // Clean up
+    WIPE_BUFFER(block);
+    WIPE_CTX(&ctx);
+}
+
+int crypto_receive(u8       session_key[32],
+                   u8       remote_pk  [32],
+                   const u8 msg        [80],
+                   const u8 random_seed[32],
+                   const u8 local_sk   [32])
+{
+    // Init context
+    crypto_handshake_ctx ctx;
+    handshake_init(&ctx, random_seed, local_sk);
+
+    // Receive ephemeral key
+    handshake_record(&ctx, msg);
+    const u8 *ephemeral_pk = msg;
+    handshake_update_key(&ctx, local_sk, ephemeral_pk);
+
+    // Receive long term key
+    handshake_record(&ctx, msg + 32);
+    u8 tmp_remote_pk[32];
+    encrypt32(tmp_remote_pk, msg + 32, ctx.key);
+    handshake_update_key(&ctx, ctx.local_sk, tmp_remote_pk);
+
+    // Verify message, get session key
+    u8 block[64];
+    if (handshake_verify_buf(&ctx, block, msg + 64)) {
+        WIPE_BUFFER(tmp_remote_pk);
+        WIPE_BUFFER(block);
+        WIPE_CTX(&ctx);
+        return -1;
+    }
+    copy32(session_key, block + 32);
+    copy32(remote_pk  , tmp_remote_pk);
+
+    WIPE_BUFFER(tmp_remote_pk);
+    WIPE_BUFFER(block);
+    WIPE_CTX(&ctx);
+    return 0;
+}
+

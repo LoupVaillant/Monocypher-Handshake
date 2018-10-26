@@ -73,3 +73,37 @@ be sent to the recipient.
 `crypto_handshake_accept()` reads the third message, authenticates the
 sender, and generates the session key.
 
+
+One way handshake
+-----------------
+
+This API tries to set up a secure key without requiring any response
+from the recipient.  (This is most useful for file encryption.) It is
+unfortunately not as secure as the interactive handshake: when the
+recipient's private key is leaked, so are the message and the identity of
+its sender. It is also not resistant against key compromise
+impersonation (if your key is leaked, you can no longer authenticate
+incoming messages).
+
+The only way to have better identity hiding is to sacrifice
+authentication altogether, by sending an _anonymous_ message.  For this,
+just use just use `crypto_key_exchange()` with an ephemeral key pair.
+There's no need for a specialised API.
+
+    void crypto_send(uint8_t       session_key[32],
+                     uint8_t       msg        [80],
+                     const uint8_t random_seed[32],
+                     const uint8_t remote_pk  [32],
+                     const uint8_t local_sk   [32],
+                     const uint8_t local_pk   [32]);
+
+    int crypto_receive(uint8_t       session_key[32],
+                       uint8_t       remote_pk  [32],
+                       const uint8_t msg        [80],
+                       const uint8_t random_seed[32],
+                       const uint8_t local_sk   [32]);
+
+The _sender_ first writes the message with `crypto_send()`. The
+recipient can then receive and authenticate the message with
+`crypto_receive()`.  The session key can then be used to secure the
+payload.

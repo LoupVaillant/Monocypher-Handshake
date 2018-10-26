@@ -84,3 +84,58 @@ authenticate the last message with nonce 0 and counter 0, which the user
 might reuse by accident. We could change those values, but it is simpler
 to just provide an untainted key.  The cost is negligible anyway, since
 a Chacha block can hold both an authentication key and a derived key.
+
+
+One way Handshake design
+========================
+
+This protocol is a direct instantiation of the X pattern from the Noise
+Protocol Framework, simplified under the assumptions that this is all
+users will ever need for one way messages. (In practice, they may need
+the N pattern as well, but then `crypto_key_exchange()` is all they
+need).
+
+One way handshake cannot be as secure as interactive handshake. This one
+for instance crumbles as soon as the recipient's private key is leaked:
+the message is disclosed, the identity of the sender is uncovered, and
+the recipient can no longer authenticate messages.  It's also vulnerable
+to replay attacks.
+
+You don't want to send such messages to sloppy recipients.
+
+
+protocol description
+--------------------
+
+The one way handshake involves the following shared secrets:
+
+- _es:_ The shared secret between the sender's ephemeral key, and the
+  recipient's long term key.
+- _ss:_ The shared secret between the sender's long term key, and the
+  recipient's long term key.
+
+Those shared secrets are used to derive the following keys:
+
+- _K1:_ HChacha20(es)
+- _K2:_ HChacha20(ss) XOR K1
+- _Ks:_ Chacha20_stream(K2) (bytes 32 to 63)
+
+The key K2 is used to generate the authentication tag _T2_:
+
+    T2 = Poly1305(Chach20_stream(K2), Es || Chacha20(K1, Ls))
+
+The content of the message is (from beginning to end):
+
+- The sender's ephemeral key _Es_, in plain text.
+- The sender's long term key _Ls_, encrypted with K1.
+- The authentication tag _T2_.
+
+The sender sends that message, the recipient receives and verify that
+message.  If the verification is successful, the protocol completes.
+Otherwise, it aborts.
+
+
+Rationale
+---------
+
+The same as for the interactive handshake.
