@@ -243,7 +243,7 @@ int crypto_receive(u8       session_key[32],
 
     // Receive long term key
     handshake_record(&ctx, msg + 32);
-    u8 tmp_remote_pk[32];
+    u8 tmp_remote_pk[32]; // don't touch remote_pk before we're sure
     encrypt32(tmp_remote_pk, msg + 32, ctx.key);
     handshake_update_key(&ctx, ctx.local_sk, tmp_remote_pk);
 
