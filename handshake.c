@@ -42,41 +42,49 @@ static void handshake_record(crypto_handshake_ctx *ctx, const u8 msg[32])
     ctx->transcript_size += 32;
 }
 
-static void handshake_auth_buf(crypto_handshake_ctx *ctx, u8 block[64],
-                               u8 mac[16])
+static void handshake_auth_session_key(crypto_handshake_ctx *ctx,
+                                       u8 session_key[32],
+                                       u8 mac        [16])
 {
-    // block = auth_key || derived_key
+    u8 block[64]; // auth_key || derived_key
+    // Derive the keys
     crypto_chacha_ctx chacha_ctx;
     crypto_chacha20_init  (&chacha_ctx, ctx->key, zero);
     crypto_chacha20_stream(&chacha_ctx, block, 64);
-    WIPE_CTX(&chacha_ctx);
-    // use the authentication key of the block
+    // Authenticate & output session key
     crypto_poly1305(mac, ctx->transcript, ctx->transcript_size, block);
+    copy32(session_key, block + 32);
+    // Clean up
+    WIPE_CTX(&chacha_ctx);
+    WIPE_BUFFER(block);
 }
 
 static void handshake_auth(crypto_handshake_ctx *ctx, u8 mac[16])
 {
-    u8 block[64];
-    handshake_auth_buf(ctx, block, mac);
-    WIPE_BUFFER(block);
+    u8 tmp[32]; // won't leak any secret. No need to wipe
+    handshake_auth_session_key(ctx, tmp, mac);
 }
 
-static int handshake_verify_buf(crypto_handshake_ctx *ctx, u8 block[64],
-                                const u8 mac[16])
+static int handshake_verify_session_key(crypto_handshake_ctx *ctx,
+                                        u8       session_key[64],
+                                        const u8 mac        [16])
 {
-    u8 real_mac[16];
-    handshake_auth_buf(ctx, block, real_mac);
+    u8 tmp_session_key[32];
+    u8 real_mac       [16];
+    handshake_auth_session_key(ctx, tmp_session_key, real_mac);
     int mismatch = crypto_verify16(real_mac, mac);
+    if (!mismatch) { // only copy the session key if all went well
+        copy32(session_key, tmp_session_key);
+    }
     WIPE_BUFFER(real_mac);
+    WIPE_BUFFER(tmp_session_key);
     return mismatch;
 }
 
 static int handshake_verify(crypto_handshake_ctx *ctx, const u8 mac[16])
 {
-    u8 block[64];
-    int mismatch = handshake_verify_buf(ctx, block, mac);
-    WIPE_BUFFER(block);
-    return mismatch;
+    u8 tmp[32]; // won't leak any secret. No need to wipe
+    return handshake_verify_session_key(ctx, tmp, mac);
 }
 
 static void handshake_init(crypto_handshake_ctx *ctx,
@@ -148,17 +156,14 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
     }
 
     // Send confirmation, get session key
-    u8 block[64];
     encrypt32(msg3, ctx->local_pk, ctx->key);
     handshake_record(ctx, msg3);
 
     // Update key & authanticate confirmation
     handshake_update_key(ctx, ctx->local_sk, ephemeral_pk);
-    handshake_auth_buf(ctx, block, msg3 + 32);
-    copy32(session_key, block + 32);
+    handshake_auth_session_key(ctx, session_key, msg3 + 32);
 
     // Clean up
-    WIPE_BUFFER(block);
     WIPE_CTX(ctx);
     return 0;
 }
@@ -178,18 +183,14 @@ int crypto_handshake_accept(crypto_handshake_ctx *ctx,
     handshake_update_key(ctx, ctx->ephemeral_sk, tmp_remote_pk);
 
     // Verify sender, get session key
-    u8 block[64];
-    if (handshake_verify_buf(ctx, block, msg3 + 32)) {
+    if (handshake_verify_session_key(ctx, session_key, msg3 + 32)) {
         WIPE_BUFFER(tmp_remote_pk);
-        WIPE_BUFFER(block);
         WIPE_CTX(ctx);
         return -1;
     }
-    copy32(session_key, block + 32);
-    copy32(remote_pk  , tmp_remote_pk);
+    copy32(remote_pk, tmp_remote_pk);
 
     // Clean up
-    WIPE_BUFFER(block);
     WIPE_BUFFER(tmp_remote_pk);
     WIPE_CTX(ctx);
     return 0;
@@ -219,12 +220,9 @@ void crypto_send(u8       session_key[32],
     handshake_update_key(&ctx, ctx.local_sk, remote_pk);
 
     // Authenticate message, get session key
-    u8 block[64];
-    handshake_auth_buf(&ctx, block, msg + 64);
-    copy32(session_key, block + 32);
+    handshake_auth_session_key(&ctx, session_key, msg + 64);
 
     // Clean up
-    WIPE_BUFFER(block);
     WIPE_CTX(&ctx);
 }
 
@@ -250,18 +248,14 @@ int crypto_receive(u8       session_key[32],
     handshake_update_key(&ctx, ctx.local_sk, tmp_remote_pk);
 
     // Verify message, get session key
-    u8 block[64];
-    if (handshake_verify_buf(&ctx, block, msg + 64)) {
+    if (handshake_verify_session_key(&ctx, session_key, msg + 64)) {
         WIPE_BUFFER(tmp_remote_pk);
-        WIPE_BUFFER(block);
         WIPE_CTX(&ctx);
         return -1;
     }
-    copy32(session_key, block + 32);
-    copy32(remote_pk  , tmp_remote_pk);
+    copy32(remote_pk, tmp_remote_pk);
 
     WIPE_BUFFER(tmp_remote_pk);
-    WIPE_BUFFER(block);
     WIPE_CTX(&ctx);
     return 0;
 }
