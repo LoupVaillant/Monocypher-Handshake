@@ -73,7 +73,7 @@ recipient, generates the session key, and writes the third message, to
 be sent to the recipient.
 
 `crypto_handshake_accept()` reads the third message, authenticates the
-sender, and generates the session key.
+sender (and get their public key), and generates the session key.
 
 
 One way handshake
