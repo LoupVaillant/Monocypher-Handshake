@@ -159,7 +159,7 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
     encrypt32(msg3, ctx->local_pk, ctx->key);
     handshake_record(ctx, msg3);
 
-    // Update key & authanticate confirmation
+    // Update key & authenticate confirmation
     handshake_update_key(ctx, ctx->local_sk, ephemeral_pk);
     handshake_auth_session_key(ctx, session_key, msg3 + 32);
 

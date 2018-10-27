@@ -87,8 +87,8 @@ incoming messages).
 
 The only way to have better identity hiding is to sacrifice
 authentication altogether, by sending an _anonymous_ message.  For this,
-just use just use `crypto_key_exchange()` with an ephemeral key pair.
-There's no need for a specialised API.
+just use `crypto_key_exchange()` with an ephemeral key pair.  There's no
+need for a specialised API.
 
     void crypto_send(uint8_t       session_key[32],
                      uint8_t       msg        [80],
