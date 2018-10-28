@@ -90,12 +90,13 @@ static int handshake_verify(crypto_handshake_ctx *ctx, const u8 mac[16])
 }
 
 static void handshake_init(crypto_handshake_ctx *ctx,
-                           const u8              random_seed[32],
+                           u8                    random_seed[32],
                            const u8              local_sk  [32])
 {
     copy32(ctx->key         , zero       );
     copy32(ctx->local_sk    , local_sk   );
     copy32(ctx->ephemeral_sk, random_seed);
+    crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
     ctx->transcript_size = 0;
     FOR (i, 0, 16) {
         ctx->key_nonce[i] = 0;
@@ -103,8 +104,8 @@ static void handshake_init(crypto_handshake_ctx *ctx,
 }
 
 void crypto_handshake_request(crypto_handshake_ctx *ctx,
+                              u8                    random_seed[32],
                               u8                    msg1       [32],
-                              const u8              random_seed[32],
                               const u8              remote_pk  [32],
                               const u8              local_sk   [32],
                               const u8              local_pk   [32])
@@ -121,9 +122,9 @@ void crypto_handshake_request(crypto_handshake_ctx *ctx,
 }
 
 void crypto_handshake_respond(crypto_handshake_ctx *ctx,
+                              u8                    random_seed[32],
                               u8                    msg2       [48],
                               const u8              msg1       [32],
-                              const u8              random_seed[32],
                               const u8              local_sk   [32])
 {
     // Init context
@@ -201,9 +202,9 @@ int crypto_handshake_accept(crypto_handshake_ctx *ctx,
     return 0;
 }
 
-void crypto_send(u8       session_key[32],
+void crypto_send(u8       random_seed[32],
+                 u8       session_key[32],
                  u8       msg        [80],
-                 const u8 random_seed[32],
                  const u8 remote_pk  [32],
                  const u8 local_sk   [32],
                  const u8 local_pk   [32])
@@ -215,7 +216,7 @@ void crypto_send(u8       session_key[32],
     else               copy32                  (ctx.local_pk, local_pk);
 
     // Send ephemeral key
-    crypto_x25519_public_key(msg, random_seed);
+    crypto_x25519_public_key(msg, ctx.ephemeral_sk);
     handshake_record(&ctx, msg);
     handshake_update_key(&ctx, ctx.ephemeral_sk, remote_pk);
 
@@ -231,10 +232,10 @@ void crypto_send(u8       session_key[32],
     WIPE_CTX(&ctx);
 }
 
-int crypto_receive(u8       session_key[32],
+int crypto_receive(u8       random_seed[32],
+                   u8       session_key[32],
                    u8       remote_pk  [32],
                    const u8 msg        [80],
-                   const u8 random_seed[32],
                    const u8 local_sk   [32])
 {
     // Init context

@@ -15,13 +15,13 @@ int main()
 
         u8 msg1[32];
         crypto_handshake_ctx client_ctx;
-        crypto_handshake_request(&client_ctx, msg1,
-                                 client_seed, server_pk, client_sk, client_pk);
+        crypto_handshake_request(&client_ctx, client_seed,
+                                  msg1, server_pk, client_sk, client_pk);
 
         u8 msg2[48];
         crypto_handshake_ctx server_ctx;
-        crypto_handshake_respond(&server_ctx, msg2, msg1,
-                                 server_seed, server_sk);
+        crypto_handshake_respond(&server_ctx, server_seed,
+                                 msg2, msg1, server_sk);
 
         u8 client_session_key[32];
         u8 msg3[48];
@@ -60,13 +60,13 @@ int main()
 
         u8 client_session_key[32];
         u8 msg               [80];
-        crypto_send(client_session_key, msg, client_seed, server_pk,
-                    client_sk, client_pk);
+        crypto_send(client_seed, client_session_key, msg,
+                    server_pk, client_sk, client_pk);
 
         u8 server_session_key[32];
         u8 remote_pk         [32]; // same as client_pk
-        if (crypto_receive(server_session_key, remote_pk, msg,
-                           server_seed, server_sk)) {
+        if (crypto_receive(server_seed, server_session_key, remote_pk,
+                           msg, server_sk)) {
             fprintf(stderr, "Cannot receive\n");
             return 1;
         }
