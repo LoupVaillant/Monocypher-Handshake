@@ -38,9 +38,9 @@ The handshake involves the following X25519 shared secrets:
 
 Those shared secrets are used to derive the following keys:
 
-- _K1:_ HChacha20(ee)
-- _K2:_ HChacha20(es) XOR K1
-- _K3:_ HChacha20(se) XOR K2
+- _K1:_ HChacha20(ee, 0)
+- _K2:_ HChacha20(es, 1) XOR K1
+- _K3:_ HChacha20(se, 2) XOR K2
 - _Ks:_ Chacha20_stream(K3) (bytes 32 to 63)
 
 The contents of the messages are:
@@ -56,8 +56,7 @@ The authentication tags T2 and T3 are constructed thus:
     T2 = Poly1305(Chach20_stream(K2), Es || Er)
     T3 = Poly1305(Chach20_stream(K3), Es || Er || Chacha20(K2, Ls))
 
-(We use the first 32 bytes of the Chacha20 stream, with nonce 0.  Note
-that the authentication of the second message is not authenticated. )
+(We use the first 32 bytes of the Chacha20 stream, with nonce 0.)
 
 The handshake aborts if the sender gets an invalid tag T2, or if the
 recipient gets an invalid tag T3. Otherwise, the handshake succeeds, and
@@ -116,8 +115,8 @@ The one way handshake involves the following shared secrets:
 
 Those shared secrets are used to derive the following keys:
 
-- _K1:_ HChacha20(es)
-- _K2:_ HChacha20(ss) XOR K1
+- _K1:_ HChacha20(es, 0)
+- _K2:_ HChacha20(ss, 1) XOR K1
 - _Ks:_ Chacha20_stream(K2) (bytes 32 to 63)
 
 The key K2 is used to generate the authentication tag _T2_:
