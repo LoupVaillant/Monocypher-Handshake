@@ -14,7 +14,7 @@ handshake.o: handshake.c handshake.h
 	$(CC) $(CFLAGS) -c -o $@ $< \
             $$(pkg-config --cflags monocypher)
 
-test.o: test.c utils.h
+test.o: test.c utils.h handshake.h
 	$(CC) $(CFLAGS) -c -o $@ $< \
             $$(pkg-config --cflags monocypher)
 
