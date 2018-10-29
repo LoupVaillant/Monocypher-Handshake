@@ -9,33 +9,35 @@ typedef uint8_t u8;
 
 static const u8 zero[32] = {0};
 
-static void copy32(u8 out[32], const u8 in[32])
-{
-    FOR (i, 0, 32) {
-        out[i] = in[i];
-    }
-}
+static void copy32(u8 out[32], const u8 in[32]){FOR (i, 0, 32){out[i] = in[i];}}
+static void xor32 (u8 out[32], const u8 in[32]){FOR (i, 0, 32){out[i]^= in[i];}}
 
-static void encrypt32(u8 out[32], const u8 in[32], const u8 key[32])
+static void handshake_encrypt32(crypto_handshake_ctx *ctx,
+                                u8 out[32], const u8 in[32])
 {
-    crypto_chacha_ctx ctx;
-    crypto_chacha20_init   (&ctx, key, zero);
-    crypto_chacha20_encrypt(&ctx, out, in, 32);
-    WIPE_CTX(&ctx);
+    copy32(out, in);
+    xor32(out, ctx->derived_keys + 32);
 }
 
 static void handshake_update_key(crypto_handshake_ctx *ctx,
                                  const u8              secret_key[32],
                                  const u8              public_key[32])
 {
+    // Derive new key from the exchange, then absorb it
     u8 new_key[32];
     crypto_x25519(new_key, secret_key, public_key);
     crypto_chacha20_H(new_key, new_key, ctx->key_nonce);
     ctx->key_nonce[0]++;
-    FOR (i, 0, 32) {
-        ctx->key[i] ^= new_key[i];
-    }
+    xor32(ctx->chaining_key, new_key);
+
+    // Derive authentication and encryption keys
+    crypto_chacha_ctx chacha_ctx;
+    crypto_chacha20_init  (&chacha_ctx, ctx->chaining_key, zero);
+    crypto_chacha20_stream(&chacha_ctx, ctx->derived_keys, 64);
+
+    // Clean up
     WIPE_BUFFER(new_key);
+    WIPE_CTX(&chacha_ctx);
 }
 
 static void handshake_record(crypto_handshake_ctx *ctx, const u8 msg[32])
@@ -44,56 +46,26 @@ static void handshake_record(crypto_handshake_ctx *ctx, const u8 msg[32])
     ctx->transcript_size += 32;
 }
 
-static void handshake_auth_session_key(crypto_handshake_ctx *ctx,
-                                       u8 session_key[32],
-                                       u8 mac        [16])
-{
-    u8 block[64]; // auth_key || derived_key
-    // Derive the keys
-    crypto_chacha_ctx chacha_ctx;
-    crypto_chacha20_init  (&chacha_ctx, ctx->key, zero);
-    crypto_chacha20_stream(&chacha_ctx, block, 64);
-    // Authenticate & output session key
-    crypto_poly1305(mac, ctx->transcript, ctx->transcript_size, block);
-    copy32(session_key, block + 32);
-    // Clean up
-    WIPE_CTX(&chacha_ctx);
-    WIPE_BUFFER(block);
-}
-
 static void handshake_auth(crypto_handshake_ctx *ctx, u8 mac[16])
 {
-    u8 tmp[32]; // won't leak any secret. No need to wipe
-    handshake_auth_session_key(ctx, tmp, mac);
-}
-
-static int handshake_verify_session_key(crypto_handshake_ctx *ctx,
-                                        u8       session_key[64],
-                                        const u8 mac        [16])
-{
-    u8 tmp_session_key[32];
-    u8 real_mac       [16];
-    handshake_auth_session_key(ctx, tmp_session_key, real_mac);
-    int mismatch = crypto_verify16(real_mac, mac);
-    if (!mismatch) { // only copy the session key if all went well
-        copy32(session_key, tmp_session_key);
-    }
-    WIPE_BUFFER(real_mac);
-    WIPE_BUFFER(tmp_session_key);
-    return mismatch;
+    crypto_poly1305(mac, ctx->transcript, ctx->transcript_size,
+                    ctx->derived_keys);
 }
 
 static int handshake_verify(crypto_handshake_ctx *ctx, const u8 mac[16])
 {
-    u8 tmp[32]; // won't leak any secret. No need to wipe
-    return handshake_verify_session_key(ctx, tmp, mac);
+    u8 real_mac[16];
+    handshake_auth(ctx, real_mac);
+    int mismatch = crypto_verify16(real_mac, mac);
+    WIPE_BUFFER(real_mac);
+    return mismatch;
 }
 
 static void handshake_init(crypto_handshake_ctx *ctx,
                            u8                    random_seed[32],
                            const u8              local_sk  [32])
 {
-    copy32(ctx->key         , zero       );
+    copy32(ctx->chaining_key, zero       );
     copy32(ctx->local_sk    , local_sk   );
     copy32(ctx->ephemeral_sk, random_seed);
     crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
@@ -162,12 +134,11 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
     }
 
     // Send confirmation, get session key
-    encrypt32(msg3, ctx->local_pk, ctx->key);
-    handshake_record(ctx, msg3);
-
-    // Update key & authenticate confirmation
+    handshake_encrypt32 (ctx, msg3, ctx->local_pk);
+    handshake_record    (ctx, msg3);
     handshake_update_key(ctx, ctx->local_sk, ephemeral_pk);
-    handshake_auth_session_key(ctx, session_key, msg3 + 32);
+    handshake_auth      (ctx, msg3 + 32);
+    copy32(session_key, ctx->derived_keys + 32);
 
     // Clean up
     WIPE_CTX(ctx);
@@ -179,25 +150,20 @@ int crypto_handshake_accept(crypto_handshake_ctx *ctx,
                             u8                    remote_pk  [32],
                             const u8              msg3       [48])
 {
-    u8 tmp_remote_pk[32]; // don't touch remote_pk before we're sure
-
-    // Receive & decrypt confirmation
-    handshake_record(ctx, msg3);
-    encrypt32(tmp_remote_pk, msg3, ctx->key);
-
-    // Update key
-    handshake_update_key(ctx, ctx->ephemeral_sk, tmp_remote_pk);
+    // Receive sender's public key
+    handshake_record    (ctx, msg3);
+    handshake_encrypt32 (ctx, ctx->remote_pk, msg3);
+    handshake_update_key(ctx, ctx->ephemeral_sk, ctx->remote_pk);
 
     // Verify sender, get session key
-    if (handshake_verify_session_key(ctx, session_key, msg3 + 32)) {
-        WIPE_BUFFER(tmp_remote_pk);
+    if (handshake_verify(ctx, msg3 + 32)) {
         WIPE_CTX(ctx);
         return -1;
     }
-    copy32(remote_pk, tmp_remote_pk);
+    copy32(remote_pk  , ctx->remote_pk);
+    copy32(session_key, ctx->derived_keys + 32);
 
     // Clean up
-    WIPE_BUFFER(tmp_remote_pk);
     WIPE_CTX(ctx);
     return 0;
 }
@@ -217,16 +183,17 @@ void crypto_send(u8       random_seed[32],
 
     // Send ephemeral key
     crypto_x25519_public_key(msg, ctx.ephemeral_sk);
-    handshake_record(&ctx, msg);
+    handshake_record    (&ctx, msg);
     handshake_update_key(&ctx, ctx.ephemeral_sk, remote_pk);
 
     // Send long term key
-    encrypt32(msg + 32, ctx.local_pk, ctx.key);
-    handshake_record(&ctx, msg + 32);
+    handshake_encrypt32 (&ctx, msg + 32, ctx.local_pk);
+    handshake_record    (&ctx, msg + 32);
     handshake_update_key(&ctx, ctx.local_sk, remote_pk);
 
     // Authenticate message, get session key
-    handshake_auth_session_key(&ctx, session_key, msg + 64);
+    handshake_auth(&ctx, msg + 64);
+    copy32(session_key, ctx.derived_keys + 32);
 
     // Clean up
     WIPE_CTX(&ctx);
@@ -243,25 +210,22 @@ int crypto_receive(u8       random_seed[32],
     handshake_init(&ctx, random_seed, local_sk);
 
     // Receive ephemeral key
-    handshake_record(&ctx, msg);
-    const u8 *ephemeral_pk = msg;
-    handshake_update_key(&ctx, local_sk, ephemeral_pk);
+    handshake_record    (&ctx, msg);
+    handshake_update_key(&ctx, local_sk, msg); // msg == ephemeral_pk
 
     // Receive long term key
-    handshake_record(&ctx, msg + 32);
-    u8 tmp_remote_pk[32]; // don't touch remote_pk before we're sure
-    encrypt32(tmp_remote_pk, msg + 32, ctx.key);
-    handshake_update_key(&ctx, ctx.local_sk, tmp_remote_pk);
+    handshake_record    (&ctx, msg + 32);
+    handshake_encrypt32 (&ctx, ctx.remote_pk, msg + 32);
+    handshake_update_key(&ctx, ctx.local_sk, ctx.remote_pk);
 
     // Verify message, get session key
-    if (handshake_verify_session_key(&ctx, session_key, msg + 64)) {
-        WIPE_BUFFER(tmp_remote_pk);
+    if (handshake_verify(&ctx, msg + 64)) {
         WIPE_CTX(&ctx);
         return -1;
     }
-    copy32(remote_pk, tmp_remote_pk);
+    copy32(remote_pk  , ctx.remote_pk);
+    copy32(session_key, ctx.derived_keys + 32);
 
-    WIPE_BUFFER(tmp_remote_pk);
     WIPE_CTX(&ctx);
     return 0;
 }
