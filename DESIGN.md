@@ -19,33 +19,44 @@ sender ID.)
 Protocol description
 --------------------
 
-Sender and recipient have the following X25519 key pairs:
+Sender and recipient have the following X25519 key pairs (private half
+in lower case, public half in upper case):
 
-- _Es:_ The sender's ephemeral key.
-- _Ls:_ The sender's long term key.
-- _Er:_ The recipient's ephemeral key.
-- _Lr:_ The recipient's long term key.
+- __(es, ES)__ The sender's ephemeral key.
+- __(ls, LS)__ The sender's long term key.
+- __(er, ER)__ The recipient's ephemeral key.
+- __(lr, LR)__ The recipient's long term key.
 
-Those key pairs are used to derive the following symmetric keys:
+Those key pairs are used to derive the following shared secrets:
 
-- _K1:_ HChacha20(X25519(Es, Er), 0)
-- _K2:_ HChacha20(X25519(Es, Lr), 1) XOR K1
-- _K3:_ HChacha20(X25519(Ls, Er), 2) XOR K2
-- _AK2, EK2:_ Chacha20_stream(K2)
-- _AK3, EK3:_ Chacha20_stream(K3)
+- __<ee>__ = X25519(es, ER) = X25519(er, ES)
+- __<el>__ = X25519(es, LR) = X25519(lr, ES)
+- __<le>__ = X25519(ls, ER) = X25519(er, LS)
 
-(The authentication keys AK* use the first 32 bytes of the Chacha20
-stream. The encryption keys EK* use the next 32 bytes. The streams'
-nonce and counter are both zero.)
+Those shared secrets are hashed to derive the following keys:
+
+- __K1:__ HChacha20(<ee>, 0)
+- __K2:__ HChacha20(<el>, 1) XOR K1
+- __K3:__ HChacha20(<le>, 2) XOR K2
+- __AK2:__ Chacha20_stream(K2) (bytes  0-31)
+- __EK2:__ Chacha20_stream(K2) (bytes 32-63)
+- __AK3:__ Chacha20_stream(K3) (bytes  0-31)
+- __EK3:__ Chacha20_stream(K3) (bytes 32-63)
+
+Notes:
+
+- The second argument of HChacha20 is a 16 bytes array, encoded in
+  little endian.
+- The streams' nonce and counter are both zero.
 
 The messages contain the following (Es, Er, and Ls denote the public
 half of the key pairs, and `||` denotes concatenation):
 
-    XLs          = Ls XOR EK2
+    XS           = LS XOR EK2
 
-    request      = Es
-    response     = Er  || Poly1305(AK2, Ls || Es || Er)
-    confirmation = XLs || Poly1305(AK3, Ls || Es || Er || XLs)
+    request      = ES
+    response     = ER || Poly1305(AK2, LS || ES || ER)
+    confirmation = XS || Poly1305(AK3, LS || ES || ER || XS)
 
 The handshake proceeds as follows:
 
@@ -70,7 +81,8 @@ _Why HChacha20 instead of a real Hash like Blake2b?_ The idea is to
 minimise the code necessary to setup and use the secure channel (less
 code means smaller programs and less strain for the instruction cache).
 Users are expected to use Chacha20/Poly1305 anyway, so we might as well
-use them to perform the handshake.
+use them to perform the handshake. (Also, HChacha20 is just as secure as
+Blake2b).
 
 
 One way Handshake design
@@ -94,28 +106,38 @@ You don't want to send such messages to sloppy recipients.
 protocol description
 --------------------
 
-Sender and recipient have the following X2519 key pairs:
+Sender and recipient have the following X25519 key pairs (private half
+in lower case, public half in upper case):
 
-- _Es:_ The sender's ephemeral key.
-- _Ls:_ The sender's long term key.
-- _Lr:_ The recipient's long term key.
+- __(es, ES)__ The sender's ephemeral key.
+- __(ls, LS)__ The sender's long term key.
+- __(lr, LR)__ The recipient's long term key.
 
-Those key pairs are used to derive the following symmetric keys:
+Those key pairs are used to derive the following shared secrets:
 
-- _K1:_ HChacha20(X25519(Es, Lr), 0)
-- _K2:_ HChacha20(X25519(Ls, Lr), 1) XOR K1
-- _AK1, EK1:_ Chacha20_stream(K1)
-- _AK2, EK2:_ Chacha20_stream(K2)
+- __<el>__ = X25519(es, LR) = X25519(lr, ES)
+- __<ll>__ = X25519(ls, LR) = X25519(lr, LS)
 
-(The authentication keys AK* use the first 32 bytes of the Chacha20
-stream. The encryption keys EK* use the next 32 bytes. The streams'
-nonce an counter are both zero.)
+Those shared secrets are hashed to derive the following keys:
+
+- __K1:__ HChacha20(<el>, 0)
+- __K2:__ HChacha20(<ll>, 1) XOR K1
+- __AK1:__ Chacha20_stream(K1) (bytes  0-31)
+- __EK1:__ Chacha20_stream(K1) (bytes 32-63)
+- __AK2:__ Chacha20_stream(K2) (bytes  0-31)
+- __EK2:__ Chacha20_stream(K2) (bytes 32-63)
+
+Notes:
+
+- The second argument of HChacha20 is a 16 bytes array, encoded in
+  little endian.
+- The streams' nonce and counter are both zero.
 
 The message contain the following (Es, Er, and Ls denote the public half
 of the key pairs, and `||` denotes concatenation):
 
-    XLs     = Ls XOR EK1
-    message = Es || XLs || Poly1305(AK2, Es || XLs)
+    XS      = LS XOR EK1
+    message = ES || XS || Poly1305(AK2, LR || Es || XS)
 
 The handshake proceeds as follows:
 
