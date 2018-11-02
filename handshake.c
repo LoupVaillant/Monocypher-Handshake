@@ -184,6 +184,7 @@ void crypto_send(u8       random_seed[32],
     // Init context
     crypto_handshake_ctx ctx;
     handshake_init(&ctx, random_seed, local_sk, local_pk);
+    handshake_record(&ctx, remote_pk);
 
     // Send ephemeral key
     crypto_x25519_public_key(msg, ctx.ephemeral_sk);
@@ -213,6 +214,7 @@ int crypto_receive(u8       random_seed[32],
     // Init context
     crypto_handshake_ctx ctx;
     handshake_init(&ctx, random_seed, local_sk, local_pk);
+    handshake_record(&ctx, local_pk);
 
     // Receive ephemeral key
     handshake_record    (&ctx, msg);
