@@ -19,7 +19,7 @@ sender ID.)
 Protocol description
 --------------------
 
-Sender and recipient have the following X2519 key pairs:
+Sender and recipient have the following X25519 key pairs:
 
 - _Es:_ The sender's ephemeral key.
 - _Ls:_ The sender's long term key.
@@ -36,7 +36,7 @@ Those key pairs are used to derive the following symmetric keys:
 
 (The authentication keys AK* use the first 32 bytes of the Chacha20
 stream. The encryption keys EK* use the next 32 bytes. The streams'
-nonce an counter are both zero.)
+nonce and counter are both zero.)
 
 The messages contain the following (Es, Er, and Ls denote the public
 half of the key pairs, and `||` denotes concatenation):
