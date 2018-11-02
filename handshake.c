@@ -63,8 +63,11 @@ static int handshake_verify(crypto_handshake_ctx *ctx, const u8 mac[16])
 
 static void handshake_init(crypto_handshake_ctx *ctx,
                            u8                    random_seed[32],
-                           const u8              local_sk  [32])
+                           const u8              local_sk   [32],
+                           const u8              local_pk   [32])
 {
+    if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
+    else               copy32                  (ctx->local_pk, local_pk);
     copy32(ctx->chaining_key, zero       );
     copy32(ctx->local_sk    , local_sk   );
     copy32(ctx->ephemeral_sk, random_seed);
@@ -83,10 +86,8 @@ void crypto_handshake_request(crypto_handshake_ctx *ctx,
                               const u8              local_pk   [32])
 {
     // Init context
-    handshake_init(ctx, random_seed, local_sk);
+    handshake_init(ctx, random_seed, local_sk, local_pk);
     copy32(ctx->remote_pk, remote_pk); // recipient's public key is known
-    if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
-    else               copy32                  (ctx->local_pk, local_pk);
 
     // Record sender public key
     handshake_record(ctx, remote_pk);
@@ -104,9 +105,7 @@ void crypto_handshake_respond(crypto_handshake_ctx *ctx,
                               const u8              local_pk   [32])
 {
     // Init context
-    handshake_init(ctx, random_seed, local_sk);
-    if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
-    else               copy32                  (ctx->local_pk, local_pk);
+    handshake_init(ctx, random_seed, local_sk, local_pk);
 
     // Receive request (no authentication yet)
     handshake_record(ctx, local_pk);
@@ -184,9 +183,7 @@ void crypto_send(u8       random_seed[32],
 {
     // Init context
     crypto_handshake_ctx ctx;
-    handshake_init(&ctx, random_seed, local_sk);
-    if (local_pk == 0) crypto_x25519_public_key(ctx.local_pk, local_sk);
-    else               copy32                  (ctx.local_pk, local_pk);
+    handshake_init(&ctx, random_seed, local_sk, local_pk);
 
     // Send ephemeral key
     crypto_x25519_public_key(msg, ctx.ephemeral_sk);
@@ -210,11 +207,12 @@ int crypto_receive(u8       random_seed[32],
                    u8       session_key[32],
                    u8       remote_pk  [32],
                    const u8 msg        [80],
-                   const u8 local_sk   [32])
+                   const u8 local_sk   [32],
+                   const u8 local_pk   [32])
 {
     // Init context
     crypto_handshake_ctx ctx;
-    handshake_init(&ctx, random_seed, local_sk);
+    handshake_init(&ctx, random_seed, local_sk, local_pk);
 
     // Receive ephemeral key
     handshake_record    (&ctx, msg);

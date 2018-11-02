@@ -54,4 +54,5 @@ int crypto_receive(uint8_t       random_seed[32],
                    uint8_t       session_key[32],
                    uint8_t       remote_pk  [32],
                    const uint8_t msg        [80],
-                   const uint8_t local_sk   [32]);
+                   const uint8_t local_sk   [32],
+                   const uint8_t local_pk   [32]);

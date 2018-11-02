@@ -66,7 +66,7 @@ int main()
         u8 server_session_key[32];
         u8 remote_pk         [32]; // same as client_pk
         if (crypto_receive(server_seed, server_session_key, remote_pk,
-                           msg, server_sk)) {
+                           msg, server_sk, server_pk)) {
             fprintf(stderr, "Cannot receive\n");
             return 1;
         }
