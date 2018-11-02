@@ -184,20 +184,22 @@ void crypto_send(u8       random_seed[32],
     // Init context
     crypto_handshake_ctx ctx;
     handshake_init(&ctx, random_seed, local_sk, local_pk);
-    handshake_record(&ctx, remote_pk);
 
-    // Send ephemeral key
+    // Send keys
     crypto_x25519_public_key(msg, ctx.ephemeral_sk);
-    handshake_record    (&ctx, msg);
     handshake_update_key(&ctx, ctx.ephemeral_sk, remote_pk);
-
-    // Send long term key
     handshake_encrypt32 (&ctx, msg + 32, ctx.local_pk);
-    handshake_record    (&ctx, msg + 32);
-    handshake_update_key(&ctx, ctx.local_sk, remote_pk);
 
-    // Authenticate message, get session key
-    handshake_auth(&ctx, msg + 64);
+    // Record transcript
+    handshake_record(&ctx, remote_pk);
+    handshake_record(&ctx, msg);
+    handshake_record(&ctx, msg + 32);
+
+    // Authenticate message
+    handshake_update_key(&ctx, ctx.local_sk, remote_pk);
+    handshake_auth      (&ctx, msg + 64);
+
+    // Get session key
     copy32(session_key, ctx.derived_keys + 32);
 
     // Clean up
@@ -214,14 +216,14 @@ int crypto_receive(u8       random_seed[32],
     // Init context
     crypto_handshake_ctx ctx;
     handshake_init(&ctx, random_seed, local_sk, local_pk);
+
+    // Record transcript
     handshake_record(&ctx, local_pk);
-
-    // Receive ephemeral key
     handshake_record    (&ctx, msg);
-    handshake_update_key(&ctx, local_sk, msg); // msg == ephemeral_pk
-
-    // Receive long term key
     handshake_record    (&ctx, msg + 32);
+
+    // Receive keys
+    handshake_update_key(&ctx, local_sk, msg); // msg == ephemeral_pk
     handshake_encrypt32 (&ctx, ctx.remote_pk, msg + 32);
     handshake_update_key(&ctx, ctx.local_sk, ctx.remote_pk);
 
