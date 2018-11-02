@@ -21,7 +21,7 @@ int main()
         u8 msg2[48];
         crypto_handshake_ctx server_ctx;
         crypto_handshake_respond(&server_ctx, server_seed,
-                                 msg2, msg1, server_sk);
+                                 msg2, msg1, server_sk, server_pk);
 
         u8 client_session_key[32];
         u8 msg3[48];

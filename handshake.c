@@ -88,6 +88,9 @@ void crypto_handshake_request(crypto_handshake_ctx *ctx,
     if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
     else               copy32                  (ctx->local_pk, local_pk);
 
+    // Record sender public key
+    handshake_record(ctx, remote_pk);
+
     // Send request
     crypto_x25519_public_key(msg1, ctx->ephemeral_sk);
     handshake_record(ctx, msg1);
@@ -97,16 +100,20 @@ void crypto_handshake_respond(crypto_handshake_ctx *ctx,
                               u8                    random_seed[32],
                               u8                    msg2       [48],
                               const u8              msg1       [32],
-                              const u8              local_sk   [32])
+                              const u8              local_sk   [32],
+                              const u8              local_pk   [32])
 {
     // Init context
     handshake_init(ctx, random_seed, local_sk);
+    if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
+    else               copy32                  (ctx->local_pk, local_pk);
 
     // Receive request (no authentication yet)
+    handshake_record(ctx, local_pk);
     handshake_record(ctx, msg1);
 
     // Update key
-    u8 *ephemeral_pk = ctx->transcript;
+    u8 *ephemeral_pk = ctx->transcript + 32;
     handshake_update_key(ctx, ctx->ephemeral_sk, ephemeral_pk);
     handshake_update_key(ctx, ctx->local_sk    , ephemeral_pk);
 

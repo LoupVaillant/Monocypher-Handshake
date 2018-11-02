@@ -2,7 +2,7 @@
 #include <stddef.h>
 
 typedef struct {
-    uint8_t transcript  [96];
+    uint8_t transcript [128];
     uint8_t chaining_key[32];
     uint8_t derived_keys[64];
     uint8_t key_nonce   [16];
@@ -27,7 +27,8 @@ void crypto_handshake_respond(crypto_handshake_ctx *ctx,
                               uint8_t               random_seed[32],
                               uint8_t               msg2       [48],
                               const uint8_t         msg1       [32],
-                              const uint8_t         local_sk   [32]);
+                              const uint8_t         local_sk   [32],
+                              const uint8_t         local_pk   [32]);
 
 int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
                              uint8_t               session_key[32],
