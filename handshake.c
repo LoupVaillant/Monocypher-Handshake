@@ -111,13 +111,14 @@ void crypto_handshake_respond(crypto_handshake_ctx *ctx,
     handshake_record(ctx, local_pk);
     handshake_record(ctx, msg1);
 
-    // Update key
+    // Send response (encrypted with EK1)
     u8 *ephemeral_pk = ctx->transcript + 32;
-    handshake_update_key(ctx, ctx->ephemeral_sk, ephemeral_pk);
-    handshake_update_key(ctx, ctx->local_sk    , ephemeral_pk);
-
-    // Send & authenticate response
+    handshake_update_key(ctx, ctx->local_sk, ephemeral_pk);
     crypto_x25519_public_key(msg2, ctx->ephemeral_sk);
+    handshake_encrypt32(ctx, msg2, msg2);
+
+    // Authenticate response with AK2
+    handshake_update_key(ctx, ctx->ephemeral_sk, ephemeral_pk);
     handshake_record(ctx, msg2);
     handshake_auth(ctx, msg2 + 32); // tag is not in the transcript
 }
@@ -127,13 +128,14 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
                              u8                    msg3       [48],
                              const u8              msg2       [48])
 {
-    // Update key
-    const u8 *ephemeral_pk = msg2;
-    handshake_update_key(ctx, ctx->ephemeral_sk, ephemeral_pk  );
+    // Receive & decrypt response
+    handshake_record(ctx, msg2);
     handshake_update_key(ctx, ctx->ephemeral_sk, ctx->remote_pk);
+    u8 ephemeral_pk[32]; // Not secret, no need to wipe
+    handshake_encrypt32(ctx, ephemeral_pk, msg2);
 
     // Receive & verify response
-    handshake_record(ctx, msg2);
+    handshake_update_key(ctx, ctx->ephemeral_sk, ephemeral_pk);
     if (handshake_verify(ctx, msg2 + 32)) {
         WIPE_CTX(ctx);
         return -1;
