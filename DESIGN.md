@@ -56,8 +56,8 @@ half of the key pairs, and `||` denotes concatenation):
     XS           = LS XOR EK2
 
     request      = ES
-    response     = XR || Poly1305(AK2, LS || ES || XR)
-    confirmation = XS || Poly1305(AK3, LS || ES || XR || XS)
+    response     = XR || Poly1305(AK2, LR || ES || XR)
+    confirmation = XS || Poly1305(AK3, LR || ES || XR || XS)
 
 The handshake proceeds as follows:
 
