@@ -24,11 +24,10 @@ static void handshake_update_key(crypto_handshake_ctx *ctx,
                                  const u8              public_key[32])
 {
     // Derive new key from the exchange, then absorb it
-    u8 new_key[32];
-    crypto_x25519(new_key, secret_key, public_key);
-    crypto_chacha20_H(new_key, new_key, ctx->key_nonce);
-    ctx->key_nonce[0]++;
-    xor32(ctx->chaining_key, new_key);
+    u8 shared_secret[32];
+    crypto_x25519(shared_secret, secret_key, public_key);
+    xor32(ctx->chaining_key, shared_secret);
+    crypto_chacha20_H(ctx->chaining_key, ctx->chaining_key, zero);
 
     // Derive authentication and encryption keys
     crypto_chacha_ctx chacha_ctx;
@@ -36,7 +35,7 @@ static void handshake_update_key(crypto_handshake_ctx *ctx,
     crypto_chacha20_stream(&chacha_ctx, ctx->derived_keys, 64);
 
     // Clean up
-    WIPE_BUFFER(new_key);
+    WIPE_BUFFER(shared_secret);
     WIPE_CTX(&chacha_ctx);
 }
 
@@ -73,9 +72,6 @@ static void handshake_init(crypto_handshake_ctx *ctx,
     copy32(ctx->ephemeral_sk, random_seed);
     crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
     ctx->transcript_size = 0;
-    FOR (i, 0, 16) {
-        ctx->key_nonce[i] = 0;
-    }
 }
 
 void crypto_handshake_request(crypto_handshake_ctx *ctx,

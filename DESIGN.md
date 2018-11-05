@@ -29,15 +29,15 @@ in lower case, public half in upper case):
 
 Those key pairs are used to derive the following shared secrets:
 
-- __<ee>__ = X25519(es, ER) = X25519(er, ES)
 - __<el>__ = X25519(es, LR) = X25519(lr, ES)
+- __<ee>__ = X25519(es, ER) = X25519(er, ES)
 - __<le>__ = X25519(ls, ER) = X25519(er, LS)
 
 Those shared secrets are hashed to derive the following keys:
 
-- __K2:__ HChacha20(<el>, 0)
-- __K1:__ HChacha20(<ee>, 1) XOR K1
-- __K3:__ HChacha20(<le>, 2) XOR K2
+- __K1:__ HChacha20(<el>)
+- __K2:__ HChacha20(<ee> XOR K1)
+- __K3:__ HChacha20(<le> XOR K2)
 - __EK1:__ Chacha20_stream(K1) (bytes 32-63)
 - __AK2:__ Chacha20_stream(K2) (bytes  0-31)
 - __EK2:__ Chacha20_stream(K2) (bytes 32-63)
@@ -46,8 +46,7 @@ Those shared secrets are hashed to derive the following keys:
 
 Notes:
 
-- The second argument of HChacha20 is a 16 bytes array, encoded in
-  little endian.
+- HChacha20 has a second input (nonce & counter), set to all zeroes.
 - The streams' nonce and counter are both zero.
 
 The messages contain the following (Es, Er, and Ls denote the public
@@ -122,8 +121,8 @@ Those key pairs are used to derive the following shared secrets:
 
 Those shared secrets are hashed to derive the following keys:
 
-- __K1:__ HChacha20(<el>, 0)
-- __K2:__ HChacha20(<ll>, 1) XOR K1
+- __K1:__ HChacha20(<el>)
+- __K2:__ HChacha20(<ll> XOR K1)
 - __AK1:__ Chacha20_stream(K1) (bytes  0-31)
 - __EK1:__ Chacha20_stream(K1) (bytes 32-63)
 - __AK2:__ Chacha20_stream(K2) (bytes  0-31)
@@ -131,8 +130,7 @@ Those shared secrets are hashed to derive the following keys:
 
 Notes:
 
-- The second argument of HChacha20 is a 16 bytes array, encoded in
-  little endian.
+- HChacha20 has a second input (nonce & counter), set to all zeroes.
 - The streams' nonce and counter are both zero.
 
 The message contain the following (Es, Er, and Ls denote the public half

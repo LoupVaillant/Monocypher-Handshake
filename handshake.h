@@ -5,7 +5,6 @@ typedef struct {
     uint8_t transcript [128];
     uint8_t chaining_key[32];
     uint8_t derived_keys[64];
-    uint8_t key_nonce   [16];
     uint8_t remote_pk   [32];
     uint8_t local_sk    [32];
     uint8_t local_pk    [32];
