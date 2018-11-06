@@ -29,16 +29,15 @@ in lower case, public half in upper case):
 
 Those key pairs are used to derive the following shared secrets:
 
-- __<el>__ = X25519(es, LR) = X25519(lr, ES)
 - __<ee>__ = X25519(es, ER) = X25519(er, ES)
+- __<el>__ = X25519(es, LR) = X25519(lr, ES)
 - __<le>__ = X25519(ls, ER) = X25519(er, LS)
 
 Those shared secrets are hashed to derive the following keys:
 
-- __K1:__ HChacha20(<el>)
-- __K2:__ HChacha20(<ee> XOR K1)
+- __K1:__ HChacha20(<ee>)
+- __K2:__ HChacha20(<el> XOR K1)
 - __K3:__ HChacha20(<le> XOR K2)
-- __EK1:__ Chacha20_stream(K1) (bytes 32-63)
 - __AK2:__ Chacha20_stream(K2) (bytes  0-31)
 - __EK2:__ Chacha20_stream(K2) (bytes 32-63)
 - __AK3:__ Chacha20_stream(K3) (bytes  0-31)
@@ -52,12 +51,11 @@ Notes:
 The messages contain the following (Es, Er, and Ls denote the public
 half of the key pairs, and `||` denotes concatenation):
 
-    XR           = ER XOR EK1
     XS           = LS XOR EK2
 
     request      = ES
-    response     = XR || Poly1305(AK2, LR || ES || XR)
-    confirmation = XS || Poly1305(AK3, LR || ES || XR || XS)
+    response     = XR || Poly1305(AK2, LR || ES || ER)
+    confirmation = XS || Poly1305(AK3, LR || ES || ER || XS)
 
 The handshake proceeds as follows:
 
