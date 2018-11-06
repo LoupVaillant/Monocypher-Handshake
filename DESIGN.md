@@ -35,18 +35,16 @@ Those key pairs are used to derive the following shared secrets:
 
 Those shared secrets are hashed to derive the following keys:
 
-- __K1:__ HChacha20(<ee>)
-- __K2:__ HChacha20(<el> XOR K1)
-- __K3:__ HChacha20(<le> XOR K2)
-- __AK2:__ Chacha20_stream(K2) (bytes  0-31)
-- __EK2:__ Chacha20_stream(K2) (bytes 32-63)
-- __AK3:__ Chacha20_stream(K3) (bytes  0-31)
-- __EK3:__ Chacha20_stream(K3) (bytes 32-63)
+- __CK1:__ HChacha20(HChacha20(zero, <ee>[0:15]), <ee>[16:31])
+- __CK2:__ HChacha20(HChacha20(CK1 , <el>[0:15]), <el>[16:31])
+- __CK3:__ HChacha20(HChacha20(CK2 , <le>[0:15]), <le>[16:31])
+- __AK2:__ Chacha20_stream(K2)[ 0:31]
+- __EK2:__ Chacha20_stream(K2)[32:63]
+- __AK3:__ Chacha20_stream(K3)[ 0:31]
+- __EK3:__ Chacha20_stream(K3)[32:63]
 
-Notes:
-
-- HChacha20 has a second input (nonce & counter), set to all zeroes.
-- The streams' nonce and counter are both zero.
+_("[x:y]" denotes a range; the streams' nonce and counter are both
+zero)_
 
 The messages contain the following (Es, Er, and Ls denote the public
 half of the key pairs, and `||` denotes concatenation):
@@ -119,17 +117,15 @@ Those key pairs are used to derive the following shared secrets:
 
 Those shared secrets are hashed to derive the following keys:
 
-- __K1:__ HChacha20(<el>)
-- __K2:__ HChacha20(<ll> XOR K1)
-- __AK1:__ Chacha20_stream(K1) (bytes  0-31)
-- __EK1:__ Chacha20_stream(K1) (bytes 32-63)
-- __AK2:__ Chacha20_stream(K2) (bytes  0-31)
-- __EK2:__ Chacha20_stream(K2) (bytes 32-63)
+- __CK1:__ HChacha20(HChacha20(zero, <ee>[0:15]), <ee>[16:31])
+- __CK2:__ HChacha20(HChacha20(CK1 , <el>[0:15]), <el>[16:31])
+- __AK1:__ Chacha20_stream(K1)[ 0:31]
+- __EK1:__ Chacha20_stream(K1)[32:63]
+- __AK2:__ Chacha20_stream(K2)[ 0:31]
+- __EK2:__ Chacha20_stream(K2)[32:63]
 
-Notes:
-
-- HChacha20 has a second input (nonce & counter), set to all zeroes.
-- The streams' nonce and counter are both zero.
+_("[x:y]" denotes a range; the streams' nonce and counter are both
+zero)_
 
 The message contain the following (Es, Er, and Ls denote the public half
 of the key pairs, and `||` denotes concatenation):

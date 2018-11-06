@@ -26,8 +26,8 @@ static void handshake_update_key(crypto_handshake_ctx *ctx,
     // Derive new key from the exchange, then absorb it
     u8 shared_secret[32];
     crypto_x25519(shared_secret, secret_key, public_key);
-    xor32(ctx->chaining_key, shared_secret);
-    crypto_chacha20_H(ctx->chaining_key, ctx->chaining_key, zero);
+    crypto_chacha20_H(ctx->chaining_key, ctx->chaining_key, shared_secret);
+    crypto_chacha20_H(ctx->chaining_key, ctx->chaining_key, shared_secret + 16);
 
     // Derive authentication and encryption keys
     crypto_chacha_ctx chacha_ctx;
