@@ -5,11 +5,14 @@ typedef struct {
     uint8_t transcript [128];
     uint8_t chaining_key[32];
     uint8_t derived_keys[64];
-    uint8_t remote_pk   [32];
     uint8_t local_sk    [32];
     uint8_t local_pk    [32];
-    uint8_t ephemeral_sk[32];
+    uint8_t local_ske   [32];
+    uint8_t local_pke   [32];
+    uint8_t remote_pk   [32];
+    uint8_t remote_pke  [32];
     size_t  transcript_size;
+    int     keys_initialized;
 } crypto_handshake_ctx;
 
 ///////////////////////////
