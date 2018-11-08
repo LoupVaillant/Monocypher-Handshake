@@ -35,16 +35,16 @@ Those key pairs are used to derive the following shared secrets:
 
 Those shared secrets are hashed to derive the following keys:
 
-- __CK1:__ HChacha20(HChacha20(zero, <ee>[0:15]), <ee>[16:31])
-- __CK2:__ HChacha20(HChacha20(CK1 , <el>[0:15]), <el>[16:31])
-- __CK3:__ HChacha20(HChacha20(CK2 , <le>[0:15]), <le>[16:31])
-- __AK2:__ Chacha20_stream(K2)[ 0:31]
-- __EK2:__ Chacha20_stream(K2)[32:63]
-- __AK3:__ Chacha20_stream(K3)[ 0:31]
-- __EK3:__ Chacha20_stream(K3)[32:63]
+- __CK1:__ Blake2b-256(zero, <ee>)
+- __CK2:__ Blake2b-256(CK1 , <el>)
+- __CK3:__ Blake2b-256(CK2 , <le>)
+- __AK2:__ Blake2b-512(CK2)[ 0:31]
+- __EK2:__ Blake2b-512(CK2)[32:63]
+- __AK3:__ Blake2b-512(CK3)[ 0:31]
+- __EK3:__ Blake2b-512(CK3)[32:63]
 
-_("[x:y]" denotes a range; the streams' nonce and counter are both
-zero)_
+_("[x:y]" denotes a range; Blake2b-256 is used in keyed mode, with the
+key on the left.)_
 
 The messages contain the following (Es, Er, and Ls denote the public
 half of the key pairs, and `||` denotes concatenation):
@@ -117,15 +117,15 @@ Those key pairs are used to derive the following shared secrets:
 
 Those shared secrets are hashed to derive the following keys:
 
-- __CK1:__ HChacha20(HChacha20(zero, <ee>[0:15]), <ee>[16:31])
-- __CK2:__ HChacha20(HChacha20(CK1 , <el>[0:15]), <el>[16:31])
-- __AK1:__ Chacha20_stream(K1)[ 0:31]
-- __EK1:__ Chacha20_stream(K1)[32:63]
-- __AK2:__ Chacha20_stream(K2)[ 0:31]
-- __EK2:__ Chacha20_stream(K2)[32:63]
+- __CK1:__ Blake2b-256(zero, <el>)
+- __CK2:__ Blake2b-256(CK1 , <ll>)
+- __AK1:__ Blake2b-512(CK1)[ 0:31]
+- __EK1:__ Blake2b-512(CK1)[32:63]
+- __AK2:__ Blake2b-512(CK2)[ 0:31]
+- __EK2:__ Blake2b-512(CK2)[32:63]
 
-_("[x:y]" denotes a range; the streams' nonce and counter are both
-zero)_
+_("[x:y]" denotes a range; Blake2b-256 is used in keyed mode, with the
+key on the left.)_
 
 The message contain the following (Es, Er, and Ls denote the public half
 of the key pairs, and `||` denotes concatenation):

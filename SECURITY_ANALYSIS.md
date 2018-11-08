@@ -21,54 +21,74 @@ Goals
 Key derivation
 --------------
 
-The ultimate goal of key derivation is that:
+Key derivation must ensure that:
 
-1. __AK2__ and __EK2__ are uniformly random and independent from each
-   other, if:
+1. __AK2__ and __EK2__ are random and independent from each other, if:
+   - __es__ and __er__ are random, _OR_
+   - __es__ and __lr__ are random.
 
-   - __es__ and __er__ are uniformly random, _OR_
-   - __es__ and __lr__ are uniformly random.
+2. __AK2__ and __AK3__ are random, independent from each other, and
+   independent from __AK2__ and __EK2__, if:
+   - __es__ and __er__ are random, _OR_
+   - __es__ and __lr__ are random. _OR_
+   - __ls__ and __er__ are random.
 
-2. __AK2__ and __AK3__ are uniformly random, independent from each
-   other, and independent from __AK2__ and __EK2__, if:
+_("Random" here means "indistinguishable from random in a feasible
+ammount of computation")_
 
-   - __es__ and __er__ are uniformly random, _OR_
-   - __es__ and __lr__ are uniformly random. _OR_
-   - __ls__ and __er__ are uniformly random.
+This is achieved by using Blake2b in keyed mode:
 
-I am currently trying to achieve that with a pure Chacha20 based scheme,
-under the assumption that hashing a single X25519 shared secret with
-HChacha20 is safe.
+- __CK1:__ Blake2b-256(zero, <ee>)
+- __CK2:__ Blake2b-256(CK1 , <el>)
+- __CK3:__ Blake2b-256(CK2 , <le>)
+- __AK2:__ Blake2b-512(CK2)[ 0:31]
+- __EK2:__ Blake2b-512(CK2)[32:63]
+- __AK3:__ Blake2b-512(CK3)[ 0:31]
+- __EK3:__ Blake2b-512(CK3)[32:63]
 
-Hashing several of them however is more delicate, and I have yet to come
-up with a suitable security reduction. Should I fail, I will change the
-current scheme to something that uses Blake2b (keyed mode).
+From the properties of Blake2b:
+
+- _CK1_ is random if _es_ and _er_ are random.
+- _CK2_ is random if _es_ and _lr_ are random _OR_ if CK1 is
+  random. Meaning, _CK2_ is random if:
+  - _es_ and _er_ are random, _OR_
+  - _es_ and _lr_ are random.
+- _CK3_ is random if _ls_ and _er_ are random _OR_ if CK2 is
+  random. Meaning, _CK3_ is random if:
+  - _es_ and _er_ are random, _OR_
+  - _es_ and _lr_ are random, _OR_
+  - _ls_ and _er_ are random.
+
+The irreversibility and unpredictability of Blake2 also implies
+independence between its input and output, so all _CK1_, _CK2_, and
+_CK3_ are all independent.
+
+Likewise:
+
+- _AK2_ and _EK2_ are random if _CK2_ is random
+- _AK3_ and _EK3_ are random if _CK3_ is random
+
+Again, they are independent from each other.  Note that _AK3_ and _EK3_
+are also independent from _CK3_, because they're not hashed with the
+same parameters (keyed hashing appends zeroes to the key, and the
+parameter block differ).
 
 
 ### Authentication, encryption, and session keys
 
-Four keys are derived from the chaining keys _K2_ and _K3_: the
-authentication keys AK2 and AK3, and the encryption keys _EK2_ and
-_EK3_.
+_AK2_, _EK2_, _AK3_, and _EK3_ are all derived from chaining keys, and
+are not used to derive any other key. Therefore, revealing those keys
+does not leak information about any other key.
 
-    AK2 || EK2 = Chacha20_stream(K2)
-    AK3 || EK3 = Chacha20_stream(K3)
-
-From assumption (3) (security of Chacha20 as a stream cipher):
-
-- Revealing _AK2_ does not leak information about _EK2_ or _K2_.
-- Revealing _AK3_ does not leak information about _EK3_ or _K3_.
-- Revealing _EK2_ does not leak information about _AK2_ or _K2_.
-
-__Conclusion:__
+Therefore:
 
 - _AK2_ can be used as the authentication key for Poly1305.  Once.
 - _AK3_ can be used as the authentication key for Poly1305.  Once.
-- _EK2_ can be used as a random stream, to encrypt _one_ message.
+- _EK2_ can be used as we would a one time pad (XOR with one message).
 
 Note that _AK2_ and _AK3_ are used for one authentication each, and
-_EK2_ is used for exactly one encryption.  Since _EK3_ isn't used for
-anything, it can safely be the session key.
+_EK2_ is used for exactly one encryption. So this is safe.  Since _EK3_
+isn't used for anything, it can safely be the session key.
 
 
 Interactive handshake

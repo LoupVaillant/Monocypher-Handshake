@@ -16,20 +16,17 @@ static void handshake_update_key(crypto_handshake_ctx *ctx,
                                  const u8              secret_key[32],
                                  const u8              public_key[32])
 {
-    // Derive new key from the exchange, then absorb it
+    // Extract
     u8 shared_secret[32];
     crypto_x25519(shared_secret, secret_key, public_key);
-    crypto_chacha20_H(ctx->chaining_key, ctx->chaining_key, shared_secret);
-    crypto_chacha20_H(ctx->chaining_key, ctx->chaining_key, shared_secret + 16);
-
-    // Derive authentication and encryption keys
-    crypto_chacha_ctx chacha_ctx;
-    crypto_chacha20_init  (&chacha_ctx, ctx->chaining_key, zero);
-    crypto_chacha20_stream(&chacha_ctx, ctx->derived_keys, 64);
+    crypto_blake2b_general(ctx->chaining_key, 32,  // new chaining key
+                           ctx->chaining_key, 32,  // old chaining key
+                           shared_secret    , 32); // input key material
+    // Expand (directly from chaining key)
+    crypto_blake2b(ctx->derived_keys, ctx->chaining_key, 32);
 
     // Clean up
     WIPE_BUFFER(shared_secret);
-    WIPE_CTX(&chacha_ctx);
 }
 
 static void handshake_auth(crypto_handshake_ctx *ctx, u8 mac[16])
