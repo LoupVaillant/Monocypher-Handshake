@@ -21,68 +21,28 @@ Goals
 Key derivation
 --------------
 
-- __Assumption (1):__ When the private keys involved in an X25519 key
-  exchange are unknown, The HChacha20 of the shared secret is
-  indistinguishable from random. _Rationale: DJB said Salsa20 is a
-  suitable way to derive keys from shared secret. in his Curve25519
-  paper._
+The ultimate goal of key derivation is that:
 
-- __Assumption (2):__ For any shared secret _<ss>_, and any nonce __i_ and
-  _j_ such that _i≠j_; `HChacha20(ss, i)` and `HChacha20(ss, j)` are
-  independent. _Rationale: Chacha20 is a stream cipher in CTR mode. The
-  same can be done with HChacha20._
+1. __AK2__ and __EK2__ are uniformly random and independent from each
+   other, if:
 
-- __Assumption (3):__ Chacha20 is a secure stream cipher.  It produces a
-  uniformly random output when its key is uniformly random. _Rationale:
-  Show me the cryptanalysis._
+   - __es__ and __er__ are uniformly random, _OR_
+   - __es__ and __lr__ are uniformly random.
 
-The chaining keys `K1`, `K2`, and `K3` are constructed thus:
+2. __AK2__ and __AK3__ are uniformly random, independent from each
+   other, and independent from __AK2__ and __EK2__, if:
 
-- __(es, ES)__ Sender's ephemeral key.
-- __(ls, LS)__ Sender's long term key.
-- __(er, ER)__ Recipient's ephemeral key.
-- __(lr, LR)__ Recipient's long term key.
+   - __es__ and __er__ are uniformly random, _OR_
+   - __es__ and __lr__ are uniformly random. _OR_
+   - __ls__ and __er__ are uniformly random.
 
-- __<ee>__ = X25519(es, ER) = X25519(er, ES)
-- __<el>__ = X25519(es, LR) = X25519(lr, ES)
-- __<le>__ = X25519(ls, ER) = X25519(er, LS)
+I am currently trying to achieve that with a pure Chacha20 based scheme,
+under the assumption that hashing a single X25519 shared secret with
+HChacha20 is safe.
 
-- __H1:__ HChacha20(<ee>, 0)
-- __H2:__ HChacha20(<el>, 1)
-- __H3:__ HChacha20(<le>, 2)
-
-- __K1:__ H1
-- __K2:__ H1 XOR H2
-- __K3:__ H1 XOR H2 XOR H3
-
-Note that:
-
-- _H1_ looks random iff both _es_ and _er_ are unknown.
-- _H2_ looks random iff both _es_ and _lr_ are unknown.
-- _H3_ looks random iff both _ls_ and _er_ are unknown.
-
-From Assumption (2) (independence of HCHacha20 hashes with different
-nonces), we can deduce that:
-
-- _K1_ looks random if _H1_ looks random.
-- _K2_ looks random if _H1_ or _H2_ looks random.
-- _K3_ looks random if _H1_ or _H2_ or _H3_ looks random.
-
-In particular, the nonces prevent XOR from cancelling out shared secrets
-that happen to be equal.
-
-__Conclusion:__ the derivation of the chaining keys K1, K2, and K3 are
-as good as the following (the `||` operator denotes concatenation):
-
-    k1 = HKDF(<ee>)
-    k2 = HKDF(<el> || k1)
-    k3 = HKDF(<le> || k2)
-
-Or the following:
-
-    k1 = HKDF(<ee>)
-    k2 = HKDF(<ee> || <el>)
-    k3 = HKDF(<ee> || <el> || <le>)
+Hashing several of them however is more delicate, and I have yet to come
+up with a suitable security reduction. Should I fail, I will change the
+current scheme to something that uses Blake2b (keyed mode).
 
 
 ### Authentication, encryption, and session keys
