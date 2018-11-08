@@ -119,7 +119,7 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
                              u8                    msg3       [48],
                              const u8              msg2       [48])
 {
-    handshake_receive   (ctx, ctx->remote_pke, msg2);
+    handshake_receive   (ctx, ctx->remote_pke, msg2);             // <- ER
     handshake_update_key(ctx, ctx->local_ske , ctx->remote_pke);  // <ee>
     handshake_update_key(ctx, ctx->local_ske , ctx->remote_pk );  // <el>
     if (handshake_verify(ctx, msg2 + 32)) { return -1; }          // verify
