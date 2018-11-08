@@ -27,18 +27,9 @@ static void handshake_update_key(crypto_handshake_ctx *ctx,
     crypto_chacha20_init  (&chacha_ctx, ctx->chaining_key, zero);
     crypto_chacha20_stream(&chacha_ctx, ctx->derived_keys, 64);
 
-    // Declare the keys as initialised
-    ctx->keys_initialized = 1;
-
     // Clean up
     WIPE_BUFFER(shared_secret);
     WIPE_CTX(&chacha_ctx);
-}
-
-static void handshake_record(crypto_handshake_ctx *ctx, const u8 msg[32])
-{
-    copy32(ctx->transcript + ctx->transcript_size, msg);
-    ctx->transcript_size += 32;
 }
 
 static void handshake_auth(crypto_handshake_ctx *ctx, u8 mac[16])
@@ -60,21 +51,23 @@ static int handshake_verify(crypto_handshake_ctx *ctx, const u8 mac[16])
 static void handshake_send(crypto_handshake_ctx *ctx,
                            u8 msg[32], const u8 src[32])
 {
+    // Send message, encrypted if we have a key
     copy32(msg, src);
-    if (ctx->keys_initialized) {
-        xor32(msg, ctx->derived_keys + 32); // encrypt
-    }
-    handshake_record(ctx, msg);
+    xor32(msg, ctx->derived_keys + 32);
+    // Record sent message
+    copy32(ctx->transcript + ctx->transcript_size, msg);
+    ctx->transcript_size += 32;
 }
 
 static void handshake_receive(crypto_handshake_ctx *ctx,
                               u8 dest[32], const u8 msg[32])
 {
-    handshake_record(ctx, msg);
+    // Record incoming message
+    copy32(ctx->transcript + ctx->transcript_size, msg);
+    ctx->transcript_size += 32;
+    // Receive message, decrypted it if we have a key
     copy32(dest, msg);
-    if (ctx->keys_initialized) {
-        xor32(dest, ctx->derived_keys + 32); // decrypt
-    }
+    xor32(dest, ctx->derived_keys + 32);
 }
 
 static void handshake_init(crypto_handshake_ctx *ctx,
@@ -84,13 +77,13 @@ static void handshake_init(crypto_handshake_ctx *ctx,
 {
     if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
     else               copy32                  (ctx->local_pk, local_pk);
-    copy32(ctx->chaining_key, zero       );
-    copy32(ctx->local_sk    , local_sk   );
-    copy32(ctx->local_ske   , random_seed);
+    copy32(ctx->chaining_key     , zero       );
+    copy32(ctx->derived_keys + 32, zero       ); // first encryption key is zero
+    copy32(ctx->local_sk         , local_sk   );
+    copy32(ctx->local_ske        , random_seed);
     crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
     crypto_x25519_public_key(ctx->local_pke, ctx->local_ske);;
     ctx->transcript_size  = 0;
-    ctx->keys_initialized = 0;
 }
 
 void crypto_handshake_request(crypto_handshake_ctx *ctx,

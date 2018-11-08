@@ -12,7 +12,6 @@ typedef struct {
     uint8_t remote_pk   [32];
     uint8_t remote_pke  [32];
     size_t  transcript_size;
-    int     keys_initialized;
 } crypto_handshake_ctx;
 
 ///////////////////////////
