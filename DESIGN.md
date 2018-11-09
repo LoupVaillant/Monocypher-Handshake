@@ -46,8 +46,7 @@ Those shared secrets are hashed to derive the following keys:
 _("[x:y]" denotes a range; Blake2b-256 is used in keyed mode, with the
 key on the left.)_
 
-The messages contain the following (Es, Er, and Ls denote the public
-half of the key pairs, and `||` denotes concatenation):
+The message contain the following (`||` denotes concatenation):
 
     XS           = LS XOR EK2
 
@@ -69,17 +68,15 @@ The handshake proceeds as follows:
 Rationale
 ---------
 
-_Why not use Noise XK1 protocol directly?_ The Noise Protocol Framework
-is quite general, and rather complex.  In practice though, one handshake
-is enough in most situations.  Solving this one problem (interactive
+__Why not use Noise directly?__ The Noise Protocol Framework is quite
+general, and rather complex.  In practice though, one handshake is
+enough in most situations.  Solving this one problem (interactive
 handshake without assuming any prior exchange), is much simpler.
 
-_Why HChacha20 instead of a real Hash like Blake2b?_ The idea is to
-minimise the code necessary to setup and use the secure channel (less
-code means smaller programs and less strain for the instruction cache).
-Users are expected to use Chacha20/Poly1305 anyway, so we might as well
-use them to perform the handshake. (Also, HChacha20 is just as secure as
-Blake2b).
+__Why Blake2b instead of the real HKDF?__ One intended use case for
+Blake2b was key derivation.  It's safe.  It's also simpler and faster
+than HKDF, which requires a significant amount of hashes. (We would call
+the hash function 32 times instead of the current 7.)
 
 
 One way Handshake design
@@ -127,11 +124,10 @@ Those shared secrets are hashed to derive the following keys:
 _("[x:y]" denotes a range; Blake2b-256 is used in keyed mode, with the
 key on the left.)_
 
-The message contain the following (Es, Er, and Ls denote the public half
-of the key pairs, and `||` denotes concatenation):
+The message contain the following (`||` denotes concatenation):
 
     XS      = LS XOR EK1
-    message = ES || XS || Poly1305(AK2, LR || Es || XS)
+    message = ES || XS || Poly1305(AK2, LR || ES || XS)
 
 The handshake proceeds as follows:
 
