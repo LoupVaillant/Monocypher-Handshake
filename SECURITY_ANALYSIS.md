@@ -34,7 +34,7 @@ Key derivation must ensure that:
    - __ls__ and __er__ are random.
 
 _("Random" here means "indistinguishable from random in a feasible
-ammount of computation")_
+amount of computation")_
 
 This is achieved by using Blake2b in keyed mode:
 
@@ -59,7 +59,7 @@ From the properties of Blake2b:
   - _es_ and _lr_ are random, _OR_
   - _ls_ and _er_ are random.
 
-The irreversibility and unpredictability of Blake2 also implies
+The irreversibly and unpredictability of Blake2 also implies
 independence between its input and output, so all _CK1_, _CK2_, and
 _CK3_ are all independent.
 
@@ -251,7 +251,7 @@ actually _generate_ a MAC, then compare it to what they received.
 Forging a genuine looking transcript is trivial for both parties, so no
 one can prove the handshake actually took place.
 
-To maximize effective deniability, though, applications should provide
+To maximise effective deniability, though, applications should provide
 an easy way to edit messages that were exchanged after the fact.
 
 Users who want _accountability_ instead can use public key signatures.
