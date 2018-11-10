@@ -22,10 +22,8 @@ Use cases might include:
 Goals are:
 
 - A simple, easy to use API.
-- A simple hard to screw up implementation.
+- A simple, hard to screw up implementation.
 - 3 messages at most.
-- Minimal dependencies: Chacha20, HChacha20, Poly1305, and X25519 ought
-  to be enough.
 
 
 Interactive handshake
