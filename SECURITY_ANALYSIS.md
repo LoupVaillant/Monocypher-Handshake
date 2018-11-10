@@ -38,9 +38,9 @@ amount of computation")_
 
 This is achieved by using Blake2b in keyed mode:
 
-- __CK1:__ Blake2b-256(zero, <ee>)
-- __CK2:__ Blake2b-256(CK1 , <el>)
-- __CK3:__ Blake2b-256(CK2 , <le>)
+- __CK1:__ Blake2b-256(zero, ee)
+- __CK2:__ Blake2b-256(CK1 , el)
+- __CK3:__ Blake2b-256(CK2 , le)
 - __AK2:__ Blake2b-512(CK2)[ 0:31]
 - __EK2:__ Blake2b-512(CK2)[32:63]
 - __AK3:__ Blake2b-512(CK3)[ 0:31]
@@ -127,15 +127,15 @@ The response contains the recipient's ephemeral key, and a MAC (Message
 Authentication Code) of the transcript.  The MAC uses the key AK2, which
 is derived from the following key exchanges:
 
-- __<ee>__ = X25519(es, ER) = X25519(er, ES)
-- __<el>__ = X25519(es, LR) = X25519(lr, ES)
+- __ee__ = X25519(es, ER) = X25519(er, ES)
+- __el__ = X25519(es, LR) = X25519(lr, ES)
 
 _ES_ might come from the sender, or from an active attacker.  _ER_ comes
 from the recipient, and is unknown to the attacker. _LR_ comes from the
 recipient, and is not yet known to the attacker.
 
 If _ES_ indeed came from the sender (whether this is a replay or not),
-the attacker will never be able to guess _<ee>_.  Even if they
+the attacker will never be able to guess _ee_.  Even if they
 compromise _LR_ later, they won't be able to guess _AK2_, and won't be
 able to interpret the MAC.
 
@@ -153,7 +153,7 @@ worth pointing out.
 ### Response (as received by the sender)
 
 The MAC of the response authenticates both _ES_ and _ER_, with _AK2_,
-which is derived from both _<ee>_ and _<el>_.  After the reception of the
+which is derived from both _ee_ and _el_.  After the reception of the
 message, the sender's transcript will contain the public half of two
 ephemeral keys:
 
@@ -167,19 +167,19 @@ The only way to construct a genuine looking MAC is to somehow:
 
 - Authenticate _ES_ (the one sent by the sender);
 - authenticate some _ER_ (which may come from the attacker);
-- be able to guess both _<ee>_ and _<el>_, to derive _AK2_.
+- be able to guess both _ee_ and _el_, to derive _AK2_.
 
-Any active attacker can guess _<ee>_: they just provide their own _ER_,
-so they can know _er_ (or provide a low order point, forcing _<ee>_ to
+Any active attacker can guess _ee_: they just provide their own _ER_,
+so they can know _er_ (or provide a low order point, forcing _ee_ to
 be a known constant).  On the other hand, besides the sender, only the
-recipient can guess _<el>_: no one else knows either _es_ or _lr_.
+recipient can guess _el_: no one else knows either _es_ or _lr_.
 Thus, only the recipient can authenticate the transcript.
 
 Attackers cannot replay old responses or otherwise modify _ES_: the
 transcript won't match, and the MAC won't look genuine.
 
 __Conclusion:__ The response has been sent by the recipient, for this
-session.  The key _ER_ comes from them, the shared secret _<ee>_ is
+session.  The key _ER_ comes from them, the shared secret _ee_ is
 unknown to the attacker, and _K2_ (and by extension the session key
 _EK3_) enjoys forward secrecy (it won't be compromised even if _LS_ or
 _LR_ get compromised later on).
@@ -221,10 +221,10 @@ The only way to produce a genuine looking MAC is to somehow:
 - Authenticate some _ES_ (which may have come from the attacker);
 - Authenticate _ER_ (the one sent by the recipient);
 - Authenticate _LS XOR EK2_ (which may have come from the attacker);
-- Know _<ee>_, _<el>_, and _<le>_.
+- Know _ee_, _el_, and _le_.
 
 Only the recipient knows _er_. Therefore, the only way to know both
-_<ee>_ and _<le>_ is to provide _both_ _ES_ and _LS_.
+_ee_ and _le_ is to provide _both_ _ES_ and _LS_.
 
 Attackers cannot replay old confirmations or otherwise modify _ER_: the
 transcript won't match, and the MAC won't look genuine.
@@ -237,7 +237,7 @@ contacts).  If _LS_ is the public key of a trusted contact, the
 connection is secure, and enjoys forward secrecy.
 
 Note that the recipient's long term key _LR_ is not involved in the
-shared secrets _<ee>_ and _<le>_, so the above holds even if _LR_ was
+shared secrets _ee_ and _le_, so the above holds even if _LR_ was
 compromised.  The recipient is resistant to key compromise
 impersonation.
 

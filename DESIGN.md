@@ -29,15 +29,15 @@ in lower case, public half in upper case):
 
 Those key pairs are used to derive the following shared secrets:
 
-- __<ee>__ = X25519(es, ER) = X25519(er, ES)
-- __<el>__ = X25519(es, LR) = X25519(lr, ES)
-- __<le>__ = X25519(ls, ER) = X25519(er, LS)
+- __ee__ = X25519(es, ER) = X25519(er, ES)
+- __el__ = X25519(es, LR) = X25519(lr, ES)
+- __le__ = X25519(ls, ER) = X25519(er, LS)
 
 Those shared secrets are hashed to derive the following keys:
 
-- __CK1:__ Blake2b-256(zero, <ee>)
-- __CK2:__ Blake2b-256(CK1 , <el>)
-- __CK3:__ Blake2b-256(CK2 , <le>)
+- __CK1:__ Blake2b-256(zero, ee)
+- __CK2:__ Blake2b-256(CK1 , el)
+- __CK3:__ Blake2b-256(CK2 , le)
 - __AK2:__ Blake2b-512(CK2)[ 0:31]
 - __EK2:__ Blake2b-512(CK2)[32:63]
 - __AK3:__ Blake2b-512(CK3)[ 0:31]
@@ -109,13 +109,13 @@ in lower case, public half in upper case):
 
 Those key pairs are used to derive the following shared secrets:
 
-- __<el>__ = X25519(es, LR) = X25519(lr, ES)
-- __<ll>__ = X25519(ls, LR) = X25519(lr, LS)
+- __el__ = X25519(es, LR) = X25519(lr, ES)
+- __ll__ = X25519(ls, LR) = X25519(lr, LS)
 
 Those shared secrets are hashed to derive the following keys:
 
-- __CK1:__ Blake2b-256(zero, <el>)
-- __CK2:__ Blake2b-256(CK1 , <ll>)
+- __CK1:__ Blake2b-256(zero, el)
+- __CK2:__ Blake2b-256(CK1 , ll)
 - __AK1:__ Blake2b-512(CK1)[ 0:31]
 - __EK1:__ Blake2b-512(CK1)[32:63]
 - __AK2:__ Blake2b-512(CK2)[ 0:31]
