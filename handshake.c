@@ -119,7 +119,10 @@ int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
     handshake_receive   (ctx, ctx->remote_pke, msg2);             // <- ER
     handshake_update_key(ctx, ctx->local_ske , ctx->remote_pke);  // <ee>
     handshake_update_key(ctx, ctx->local_ske , ctx->remote_pk );  // <el>
-    if (handshake_verify(ctx, msg2 + 32)) { return -1; }          // verify
+    if (handshake_verify(ctx, msg2 + 32)) {                       // verify
+        FOR (i, 0, 48) { msg3[i] = 0; }
+        return -1;
+    }
     handshake_send      (ctx, msg3           , ctx->local_pk  );  // -> LS
     handshake_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  // <le>
     handshake_auth      (ctx, msg3 + 32);                         // auth
@@ -138,7 +141,6 @@ int crypto_handshake_accept(crypto_handshake_ctx *ctx,
     handshake_receive   (ctx, ctx->remote_pk, msg3          );    // -> LS
     handshake_update_key(ctx, ctx->local_ske, ctx->remote_pk);    // <le>
     if (handshake_verify(ctx, msg3 + 32)) { return -1; }          // verify
-
     copy32(remote_pk  , ctx->remote_pk);
     copy32(session_key, ctx->derived_keys + 32);
 
