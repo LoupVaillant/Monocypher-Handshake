@@ -97,7 +97,7 @@ Interactive handshake
 The interactive handshake involves 3 messages: the _request_, the
 _response_, and the _confirmation_, containing the following:
 
-    XS           = Ls XOR EK2
+    XS           = LS XOR EK2
 
     request      = ES
     response     = ER || Poly1305(AK2, LR || ES || ER)
