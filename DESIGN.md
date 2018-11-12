@@ -51,7 +51,7 @@ The message contain the following (`||` denotes concatenation):
     XS           = LS XOR EK2
 
     request      = ES
-    response     = XR || Poly1305(AK2, LR || ES || ER)
+    response     = ER || Poly1305(AK2, LR || ES || ER)
     confirmation = XS || Poly1305(AK3, LR || ES || ER || XS)
 
 The handshake proceeds as follows:
