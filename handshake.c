@@ -79,7 +79,7 @@ static void handshake_init(crypto_handshake_ctx *ctx,
     copy32(ctx->local_sk         , local_sk   );
     copy32(ctx->local_ske        , random_seed);
     crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
-    crypto_x25519_public_key(ctx->local_pke, ctx->local_ske);;
+    crypto_x25519_public_key(ctx->local_pke, ctx->local_ske);
     ctx->transcript_size  = 0;
 }
 

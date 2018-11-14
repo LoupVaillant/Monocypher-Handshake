@@ -97,7 +97,7 @@ to replay attacks.
 You don't want to send such messages to sloppy recipients.
 
 
-protocol description
+Protocol description
 --------------------
 
 Sender and recipient have the following X25519 key pairs (private half
