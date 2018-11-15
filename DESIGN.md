@@ -58,10 +58,10 @@ The handshake proceeds as follows:
 
 1. The sender sends the _request_ to the recipient.
 2. The recipient receives the request, then sends its _response_.
-3. The sender authenticates the response, and aborts if it fails.
+3. The sender verifies the response, and aborts if it fails.
 4. The sender sends its _confirmation_ to the recipient.
-5. The recipient decrypts & records the sender's transmitted public key.
-6. The recipient authenticates the confirmation, and aborts if it fails.
+5. The recipient verifies the confirmation, and aborts if it fails.
+6. The recipient decrypts & records the sender's transmitted public key.
 7. The protocol is complete. The session key is _EK3_.
 
 
@@ -133,7 +133,7 @@ The handshake proceeds as follows:
 
 1. The sender sends the _message_ to the recipient.
 2. The recipient decrypts & records the sender's transmitted public key.
-3. The recipient authenticates the message, and aborts if it fails.
+3. The recipient verifies the message, and aborts if it fails.
 4. The protocol is complete. The session key is _EK2_.
 
 
