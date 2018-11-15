@@ -139,9 +139,9 @@ the attacker will never be able to guess _ee_.  Even if they
 compromise _LR_ later, they won't be able to guess _AK2_, and won't be
 able to interpret the MAC.
 
-If _ES_ is a low order point, the shared secrets, and therefore _K2_
-_AK2_, will be known constants.  The MAC will be independent from _LR_,
-and won't leak the identity of the recipient.
+If _ES_ is a low order point, the shared secrets will be known
+constants, and so will _K2_ and _AK2_.  The MAC will be independent from
+_LR_, and won't leak the identity of the recipient.
 
 If _ES_ comes from the attacker, the tag will leak the identity of the
 recipient (the attacker has to try all known public keys to get to the
