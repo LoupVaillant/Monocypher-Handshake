@@ -154,9 +154,9 @@ worth pointing out.
 
 The MAC of the response authenticates both _ES_ and _ER_, with _AK2_,
 which is derived from both _ee_ and _el_.  After the reception of the
-message, the sender's transcript will contain the public half of two
-ephemeral keys:
+message, the sender's transcript will contain:
 
+- _LR_, which is known in advance.
 - _ES_, which they sent themselves.
 - _ER_, which they just received, and could come from an attacker.
 
@@ -208,10 +208,11 @@ __Conclusion:__ The sender is anonymous, now and forever.
 
 ### Confirmation (as received by the recipient)
 
-The response contains _LS_ (encrypted), and a MAC of the
+The confirmation contains _LS_ (encrypted), and a MAC of the
 transcript. When the recipient receives it, their transcript will
 contain the following:
 
+- _LR_, which is set in advance.
 - _ES_, which could have been sent by anyone.
 - _ER_, which the recipient have sent.
 - _LS XOR EK2_, which an attacker might try to forge.
