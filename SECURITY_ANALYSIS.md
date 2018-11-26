@@ -1,7 +1,7 @@
 Security Analysis
 =================
 
-Here is is an informal security analysis of the handshake.
+Here is an informal security analysis of the handshake.
 
 Goals
 -----
