@@ -46,7 +46,7 @@ Those shared secrets are hashed to derive the following keys:
 _("[x:y]" denotes a range; Blake2b-256 is used in keyed mode, with the
 key on the left.)_
 
-The message contain the following (`||` denotes concatenation):
+The messages contain the following (`||` denotes concatenation):
 
     XS           = LS XOR EK2
 
