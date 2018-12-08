@@ -91,25 +91,25 @@ static void get_interactive_session(u8 msg1[32], u8 msg2[48], u8 msg3[48],
         s_seed[i] = server_seed[i];
     }
 
-    crypto_handshake_ctx client_ctx;
-    crypto_handshake_request(&client_ctx, c_seed,
-                             msg1, server_pk, client_sk, client_pk);
+    crypto_kex_ctx client_ctx;
+    crypto_kex_request(&client_ctx, c_seed,
+                       msg1, server_pk, client_sk, client_pk);
 
-    crypto_handshake_ctx server_ctx;
-    crypto_handshake_respond(&server_ctx, s_seed,
-                             msg2, msg1, server_sk, server_pk);
+    crypto_kex_ctx server_ctx;
+    crypto_kex_respond(&server_ctx, s_seed,
+                       msg2, msg1, server_sk, server_pk);
 
     u8 client_session_key[32];
-    if (crypto_handshake_confirm(&client_ctx, client_session_key,
-                                 msg3, msg2)) {
+    if (crypto_kex_confirm(&client_ctx, client_session_key,
+                           msg3, msg2)) {
         fprintf(stderr, "Cannot confirm\n");
         return;
     }
 
     u8 server_session_key[32];
     u8 remote_pk         [32]; // same as client_pk
-    if (crypto_handshake_accept(&server_ctx, server_session_key, remote_pk,
-                                msg3)) {
+    if (crypto_kex_accept(&server_ctx, server_session_key, remote_pk,
+                          msg3)) {
         fprintf(stderr, "Cannot accept\n");
         return;
     }
@@ -139,15 +139,15 @@ static u64 interactive_client(void)
                             client_seed, server_seed);
     TIMING_START {
         u8 session_key[32];
-        crypto_handshake_ctx client_ctx;
+        crypto_kex_ctx client_ctx;
         u8 seed[32];
         FOR (i, 0, 32) {
             seed[i] = client_seed[i];
         }
-        crypto_handshake_request(&client_ctx, seed,
-                                 msg1, server_pk, client_sk, client_pk);
-        if (crypto_handshake_confirm(&client_ctx, session_key,
-                                     msg3, msg2)) {
+        crypto_kex_request(&client_ctx, seed,
+                           msg1, server_pk, client_sk, client_pk);
+        if (crypto_kex_confirm(&client_ctx, session_key,
+                               msg3, msg2)) {
             fprintf(stderr, "Cannot confirm\n");
             return 1;
         }
@@ -170,15 +170,15 @@ static u64 interactive_server(void)
     TIMING_START {
         u8 session_key[32];
         u8 remote_pk         [32]; // same as client_pk
-        crypto_handshake_ctx server_ctx;
+        crypto_kex_ctx server_ctx;
         u8 seed[32];
         FOR (i, 0, 32) {
             seed[i] = server_seed[i];
         }
-        crypto_handshake_respond(&server_ctx, seed,
-                                 msg2, msg1, server_sk, server_pk);
-        if (crypto_handshake_accept(&server_ctx, session_key, remote_pk,
-                                    msg3)) {
+        crypto_kex_respond(&server_ctx, seed,
+                           msg2, msg1, server_sk, server_pk);
+        if (crypto_kex_accept(&server_ctx, session_key, remote_pk,
+                              msg3)) {
             fprintf(stderr, "Cannot accept\n");
             return 1;
         }

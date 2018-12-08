@@ -22,27 +22,27 @@ static void test_vectors_interactive(const uint8_t client_sk  [32],
     printf("\n");
 
     u8 msg1[32];
-    crypto_handshake_ctx client_ctx;
-    crypto_handshake_request(&client_ctx, client_seed,
-                             msg1, server_pk, client_sk, client_pk);
+    crypto_kex_ctx client_ctx;
+    crypto_kex_request(&client_ctx, client_seed,
+                       msg1, server_pk, client_sk, client_pk);
 
     u8 msg2[48];
-    crypto_handshake_ctx server_ctx;
-    crypto_handshake_respond(&server_ctx, server_seed,
-                             msg2, msg1, server_sk, server_pk);
+    crypto_kex_ctx server_ctx;
+    crypto_kex_respond(&server_ctx, server_seed,
+                       msg2, msg1, server_sk, server_pk);
 
     u8 client_session_key[32];
     u8 msg3[48];
-    if (crypto_handshake_confirm(&client_ctx, client_session_key,
-                                 msg3, msg2)) {
+    if (crypto_kex_confirm(&client_ctx, client_session_key,
+                           msg3, msg2)) {
         fprintf(stderr, "Cannot confirm\n");
         return;
     }
 
     u8 server_session_key[32];
     u8 remote_pk         [32]; // same as client_pk
-    if (crypto_handshake_accept(&server_ctx, server_session_key, remote_pk,
-                                msg3)) {
+    if (crypto_kex_accept(&server_ctx, server_session_key, remote_pk,
+                          msg3)) {
         fprintf(stderr, "Cannot accept\n");
         return;
     }
