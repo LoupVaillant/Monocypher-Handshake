@@ -68,9 +68,9 @@ static void kex_receive(crypto_kex_ctx *ctx,
 }
 
 static void kex_init(crypto_kex_ctx *ctx,
-                     u8              random_seed[32],
-                     const u8        local_sk   [32],
-                     const u8        local_pk   [32])
+                     uint8_t         random_seed[32],
+                     const uint8_t   local_sk   [32],
+                     const uint8_t   local_pk   [32])
 {
     if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
     else               copy32                  (ctx->local_pk, local_pk);
@@ -83,27 +83,34 @@ static void kex_init(crypto_kex_ctx *ctx,
     ctx->transcript_size  = 0;
 }
 
-void crypto_kex_request(crypto_kex_ctx *ctx,
-                        u8              random_seed[32],
-                        u8              msg1       [32],
-                        const u8        remote_pk  [32],
-                        const u8        local_sk   [32],
-                        const u8        local_pk   [32])
+
+void crypto_kex_init_client(crypto_kex_ctx *ctx,
+                            uint8_t         random_seed[32],
+                            const uint8_t   local_sk   [32],
+                            const uint8_t   local_pk   [32],
+                            const uint8_t   remote_pk  [32])
 {
-    kex_init   (ctx, random_seed, local_sk, local_pk);
-    kex_receive(ctx, ctx->remote_pk, remote_pk     );      //    LR
-    kex_send   (ctx, msg1          , ctx->local_pke);      // -> ES
+    kex_init(ctx, random_seed, local_sk, local_pk);
+    kex_receive(ctx, ctx->remote_pk, remote_pk);
 }
 
-void crypto_kex_respond(crypto_kex_ctx *ctx,
-                        u8              random_seed[32],
-                        u8              msg2       [48],
-                        const u8        msg1       [32],
-                        const u8        local_sk   [32],
-                        const u8        local_pk   [32])
+void crypto_kex_init_server(crypto_kex_ctx *ctx,
+                            uint8_t         random_seed[32],
+                            const uint8_t   local_sk   [32],
+                            const uint8_t   local_pk   [32])
 {
-    kex_init      (ctx, random_seed, local_sk, local_pk );
-    kex_receive   (ctx, ctx->local_pk  , local_pk       );  //    LR
+    kex_init(ctx, random_seed, local_sk, local_pk);
+    kex_receive(ctx, ctx->local_pk, local_pk);
+}
+
+
+void crypto_kex_request(crypto_kex_ctx *ctx, u8 msg1[32])
+{
+    kex_send      (ctx, msg1           , ctx->local_pke );  // -> ES
+}
+
+void crypto_kex_respond(crypto_kex_ctx *ctx, u8 msg2[48], const u8 msg1[32])
+{
     kex_receive   (ctx, ctx->remote_pke, msg1           );  // -> ES
     kex_send      (ctx, msg2           , ctx->local_pke );  // <- ER
     kex_update_key(ctx, ctx->local_ske , ctx->remote_pke);  // <ee>
@@ -116,7 +123,7 @@ int crypto_kex_confirm(crypto_kex_ctx *ctx,
                        u8              msg3       [48],
                        const u8        msg2       [48])
 {
-    kex_receive   (ctx, ctx->remote_pke, msg2);             // <- ER
+    kex_receive   (ctx, ctx->remote_pke, msg2           );  // <- ER
     kex_update_key(ctx, ctx->local_ske , ctx->remote_pke);  // <ee>
     kex_update_key(ctx, ctx->local_ske , ctx->remote_pk );  // <el>
     if (kex_verify(ctx, msg2 + 32)) {                       // verify
@@ -148,47 +155,35 @@ int crypto_kex_accept(crypto_kex_ctx *ctx,
     return 0;
 }
 
-void crypto_send(u8       random_seed[32],
-                 u8       session_key[32],
-                 u8       msg        [80],
-                 const u8 remote_pk  [32],
-                 const u8 local_sk   [32],
-                 const u8 local_pk   [32])
+void crypto_send(crypto_kex_ctx *ctx,
+                 u8              session_key[32],
+                 u8              msg        [80])
 {
-    // Init context
-    crypto_kex_ctx ctx;
-    kex_init      (&ctx, random_seed, local_sk, local_pk);
-    kex_receive   (&ctx, ctx.remote_pk, remote_pk    );    //    LR
-    kex_send      (&ctx, msg          , ctx.local_pke);    // -> ES
-    kex_update_key(&ctx, ctx.local_ske, ctx.remote_pk);    // <el>
-    kex_send      (&ctx, msg + 32     , ctx.local_pk );    // -> LS
-    kex_update_key(&ctx, ctx.local_sk , ctx.remote_pk);    // <ll>
-    kex_auth      (&ctx, msg + 64);                        // auth
+    kex_send      (ctx, msg           , ctx->local_pke);    // -> ES
+    kex_update_key(ctx, ctx->local_ske, ctx->remote_pk);    // <el>
+    kex_send      (ctx, msg + 32      , ctx->local_pk );    // -> LS
+    kex_update_key(ctx, ctx->local_sk , ctx->remote_pk);    // <ll>
+    kex_auth      (ctx, msg + 64);                          // auth
 
-    copy32(session_key, ctx.derived_keys + 32);
+    copy32(session_key, ctx->derived_keys + 32);
 
     // Clean up
     WIPE_CTX(&ctx);
 }
 
-int crypto_receive(u8       random_seed[32],
-                   u8       session_key[32],
-                   u8       remote_pk  [32],
-                   const u8 msg        [80],
-                   const u8 local_sk   [32],
-                   const u8 local_pk   [32])
+int crypto_receive(crypto_kex_ctx *ctx,
+                   u8              session_key[32],
+                   u8              remote_pk  [32],
+                   const u8        msg        [80])
 {
-    crypto_kex_ctx ctx;
-    kex_init      (&ctx, random_seed, local_sk, local_pk);
-    kex_receive   (&ctx, ctx.local_pk  , local_pk      );  //    LR
-    kex_receive   (&ctx, ctx.remote_pke, msg           );  // -> ES
-    kex_update_key(&ctx, local_sk      , ctx.remote_pke);  // <el>
-    kex_receive   (&ctx, ctx.remote_pk , msg+32        );  // -> LS
-    kex_update_key(&ctx, ctx.local_sk  , ctx.remote_pk );  // <ll>
-    if (kex_verify(&ctx, msg + 64)) { return -1; }         // verify
+    kex_receive   (ctx, ctx->remote_pke, msg            );  // -> ES
+    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  // <el>
+    kex_receive   (ctx, ctx->remote_pk , msg + 32       );  // -> LS
+    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pk );  // <ll>
+    if (kex_verify(ctx, msg + 64)) { return -1; }           // verify
 
-    copy32(remote_pk  , ctx.remote_pk);
-    copy32(session_key, ctx.derived_keys + 32);
+    copy32(remote_pk  , ctx->remote_pk);
+    copy32(session_key, ctx->derived_keys + 32);
 
     WIPE_CTX(&ctx);
     return 0;
