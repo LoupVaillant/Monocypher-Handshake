@@ -8,6 +8,7 @@
 typedef uint8_t u8;
 
 static const u8 zero[32] = {0};
+static const u8 one [16] = {1};
 
 static void copy32(u8 out[32], const u8 in[32]){FOR (i, 0, 32){out[i] = in[i];}}
 static void xor32 (u8 out[32], const u8 in[32]){FOR (i, 0, 32){out[i]^= in[i];}}
@@ -19,14 +20,18 @@ static void kex_update_key(crypto_kex_ctx *ctx,
     // Extract
     u8 shared_secret[32];
     crypto_x25519(shared_secret, secret_key, public_key);
-    crypto_blake2b_general(ctx->chaining_key, 32,  // new chaining key
-                           ctx->chaining_key, 32,  // old chaining key
-                           shared_secret    , 32); // input key material
+    crypto_chacha20_H(shared_secret    , shared_secret    , zero);
+    crypto_chacha20_H(ctx->chaining_key, ctx->chaining_key, one );
+    xor32(ctx->chaining_key, shared_secret);
+
     // Expand (directly from chaining key)
-    crypto_blake2b(ctx->derived_keys, ctx->chaining_key, 32);
+    crypto_chacha_ctx chacha_ctx;
+    crypto_chacha20_init  (&chacha_ctx, ctx->chaining_key, zero);
+    crypto_chacha20_stream(&chacha_ctx, ctx->derived_keys, 64);
 
     // Clean up
     WIPE_BUFFER(shared_secret);
+    WIPE_CTX(&chacha_ctx);
 }
 
 static void kex_auth(crypto_kex_ctx *ctx, u8 mac[16])

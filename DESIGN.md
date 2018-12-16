@@ -30,21 +30,21 @@ in lower case, public half in upper case):
 Those key pairs are used to derive the following shared secrets:
 
 - __ee__ = X25519(es, ER) = X25519(er, ES)
-- __el__ = X25519(es, LR) = X25519(lr, ES)
-- __le__ = X25519(ls, ER) = X25519(er, LS)
+- __es__ = X25519(es, LR) = X25519(lr, ES)
+- __se__ = X25519(ls, ER) = X25519(er, LS)
 
 Those shared secrets are hashed to derive the following keys:
 
-- __CK1:__ Blake2b-256(zero, ee)
-- __CK2:__ Blake2b-256(CK1 , el)
-- __CK3:__ Blake2b-256(CK2 , le)
-- __AK2:__ Blake2b-512(CK2)[ 0:31]
-- __EK2:__ Blake2b-512(CK2)[32:63]
-- __AK3:__ Blake2b-512(CK3)[ 0:31]
-- __EK3:__ Blake2b-512(CK3)[32:63]
+- __CK1:__ HChacha20(ee, zero) XOR HChacha20(zero, one)
+- __CK2:__ HChacha20(es, zero) XOR HChacha20(CK1 , one)
+- __CK3:__ HChacha20(se, zero) XOR HChacha20(CK2 , one)
+- __AK2:__ Chacha20(CK2, zero)[ 0:31]
+- __EK2:__ Chacha20(CK2, zero)[32:63]
+- __AK3:__ Chacha20(CK3, zero)[ 0:31]
+- __EK3:__ Chacha20(CK3, zero)[32:63]
 
-_("[x:y]" denotes a range; Blake2b-256 is used in keyed mode, with the
-key on the left.)_
+_("[x:y]" denotes a range; zero and one are encoded in little endian
+format)._
 
 The messages contain the following (`||` denotes concatenation):
 
@@ -73,10 +73,11 @@ general, and rather complex.  In practice though, one handshake is
 enough in most situations.  Solving this one problem (interactive
 handshake without assuming any prior exchange), is much simpler.
 
-__Why Blake2b instead of the real HKDF?__ One intended use case for
-Blake2b was key derivation.  It's safe.  It's also simpler and faster
-than HKDF, which requires a significant amount of hashes. (We would call
-the hash function 32 times instead of the current 7.)
+__Why keys are derived with HChacha20 instead of HKDF?__ The handshake
+is intened to be used for a ChachaPoly based AEAD session.  Using
+HChacha20 allows us to avoid brining in another primitive.  It's also
+faster than HKDF.  Safety wise, the thing looks legit. (TODO: security
+reduction).
 
 
 One way Handshake design
@@ -109,20 +110,20 @@ in lower case, public half in upper case):
 
 Those key pairs are used to derive the following shared secrets:
 
-- __el__ = X25519(es, LR) = X25519(lr, ES)
-- __ll__ = X25519(ls, LR) = X25519(lr, LS)
+- __es__ = X25519(es, LR) = X25519(lr, ES)
+- __ss__ = X25519(ls, LR) = X25519(lr, LS)
 
 Those shared secrets are hashed to derive the following keys:
 
-- __CK1:__ Blake2b-256(zero, el)
-- __CK2:__ Blake2b-256(CK1 , ll)
-- __AK1:__ Blake2b-512(CK1)[ 0:31]
-- __EK1:__ Blake2b-512(CK1)[32:63]
-- __AK2:__ Blake2b-512(CK2)[ 0:31]
-- __EK2:__ Blake2b-512(CK2)[32:63]
+- __CK1:__ HChacha20(es, zero) XOR HChacha20(zero, one)
+- __CK2:__ HChacha20(ss, zero) XOR HChacha20(CK1 , one)
+- __AK1:__ Chacha20(CK1, zero)[ 0:31]
+- __EK1:__ Chacha20(CK1, zero)[32:63]
+- __AK2:__ Chacha20(CK2, zero)[ 0:31]
+- __EK2:__ Chacha20(CK2, zero)[32:63]
 
-_("[x:y]" denotes a range; Blake2b-256 is used in keyed mode, with the
-key on the left.)_
+_("[x:y]" denotes a range; zero and one are encoded in little endian
+format)._
 
 The message contain the following (`||` denotes concatenation):
 
