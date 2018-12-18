@@ -21,57 +21,77 @@ Goals
 Key derivation
 --------------
 
-Key derivation must ensure that:
+Key derivation must ensure that if any shared secret is indeed secret,
+all output keys must be indistinguishable from uniformly random.
 
-1. __AK2__ and __EK2__ are random and independent from each other, if:
-   - __es__ and __er__ are random, _OR_
-   - __es__ and __lr__ are random.
+For this, we use a cascading scheme involving the following:
 
-2. __AK2__ and __AK3__ are random, independent from each other, and
-   independent from __AK2__ and __EK2__, if:
-   - __es__ and __er__ are random, _OR_
-   - __es__ and __lr__ are random. _OR_
-   - __ls__ and __er__ are random.
+- __ss(i):__ current shared secret
+- __CK(i-1):__ previous chaining key
+- __CK(i):__ current chaining key
+- __AK(i):__ current authentication key
+- __EK(i):__ current encryption key
 
-_("Random" here means "indistinguishable from random in a feasible
-amount of computation")_
+From the current shared secret and the previous chaining key, we derive
+all current keys thus:
 
-This is achieved by using Blake2b in keyed mode:
+    CK(0) = zero
+    CK(i) = HChacha20(ss(i), zero) XOR HChacha20(CK(i-1), one)
+    AK(i) = Chacha20(CK(i), one)[ 0:31]
+    EK(i) = Chacha20(CK(i), one)[32:63]
 
-- __CK1:__ Blake2b-256(zero, ee)
-- __CK2:__ Blake2b-256(CK1 , el)
-- __CK3:__ Blake2b-256(CK2 , le)
-- __AK2:__ Blake2b-512(CK2)[ 0:31]
-- __EK2:__ Blake2b-512(CK2)[32:63]
-- __AK3:__ Blake2b-512(CK3)[ 0:31]
-- __EK3:__ Blake2b-512(CK3)[32:63]
+This is an extract-expand scheme, where __CK(i)__ is extracted from
+__ss(i)__ and __CK(i-1)__, to then be expanded into __AK(i)__,
+__EK(i)__, and __CK(i+1)__.
 
-From the properties of Blake2b:
+__Notation:__ by "random", we mean "indistinguishable from uniformly
+random in a feasible amount of computation".
 
-- _CK1_ is random if _es_ and _er_ are random.
-- _CK2_ is random if _es_ and _lr_ are random _OR_ if CK1 is
-  random. Meaning, _CK2_ is random if:
-  - _es_ and _er_ are random, _OR_
-  - _es_ and _lr_ are random.
-- _CK3_ is random if _ls_ and _er_ are random _OR_ if CK2 is
-  random. Meaning, _CK3_ is random if:
-  - _es_ and _er_ are random, _OR_
-  - _es_ and _lr_ are random, _OR_
-  - _ls_ and _er_ are random.
+__Assumption:__ if __ss(i)__ is secret (the attacker doesn't know the
+private halves of the involved keys), then its HChacha20 is random.
+Justification: The NaCl crypto library uses HSalsa20 for its own key
+exchanges.
 
-The irreversibly and unpredictability of Blake2 also implies
-independence between its input and output, so all _CK1_, _CK2_, and
-_CK3_ are all independent.
+__Theorem:__ if A and B are independent, and at least one of them is
+random, then A XOR B is random. Justification: obvious.
 
-Likewise:
+There are 4 cases to consider:
 
-- _AK2_ and _EK2_ are random if _CK2_ is random
-- _AK3_ and _EK3_ are random if _CK3_ is random
+1. __ss(i)__ is secret and __CK(i-1)__ is random.
+2. __ss(i)__ is secret and __CK(i-1)__ is known.
+3. __ss(i)__ is known and __CK(i-1)__ is random.
+4. __ss(i)__ is known and __CK(i-1)__ is known.
 
-Again, they are independent from each other.  Note that _AK3_ and _EK3_
-are also independent from _CK3_, because they're not hashed with the
-same parameters (keyed hashing appends zeroes to the key, and the
-parameter block differ).
+In case (4), the attacker knows __CK(i)__. In the other cases,
+__CK(i)__ is random, and independent from its inputs.  Justification: if
+__CK(i-1)__ is random, its HChacha20 is independently random, and so is
+its XOR with anything else.  Same goes for __ss(i)__.
+
+Also, if __CK(i)__ is random, then __AK(i)__ and __EK(i)__ are
+independently random (they use a different nonce from all other Chacha20
+computations).
+
+We can then deduce that for any i and j such that i < j: If any of
+__ss(1)__, __ss(2)__ … __ss(i)__ is secret, then all chaining keys from
+__CK(i)__ to __CK(j)__ are random, and independent from each
+other. Therefore, all keys from __AK(i)__ to __AK(j)__, as well as all
+keys from __EK(i)__ to __EK(j)__, are random, and independent from
+anything else.
+
+We can then apply this to our key exchange:
+
+- __CK1:__ HChacha20(ee, zero) XOR HChacha20(zero, one)
+- __CK2:__ HChacha20(es, zero) XOR HChacha20(CK1 , one)
+- __CK3:__ HChacha20(se, zero) XOR HChacha20(CK2 , one)
+- __AK2:__ Chacha20(CK2, one)[ 0:31]
+- __EK2:__ Chacha20(CK2, one)[32:63]
+- __AK3:__ Chacha20(CK3, one)[ 0:31]
+- __EK3:__ Chacha20(CK3, one)[32:63]
+
+1. __AK2__ and __EK2__ are independently random if any of __ee__ or
+   __es__ is secret.
+1. __AK2__ and __EK2__ are independently random if any of __ee__,
+   __es__, or __se__ is secret.
 
 
 ### Authentication, encryption, and session keys
