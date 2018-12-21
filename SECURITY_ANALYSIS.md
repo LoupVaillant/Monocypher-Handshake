@@ -22,61 +22,70 @@ Key derivation
 --------------
 
 Key derivation must ensure that if any shared secret is indeed secret,
-all output keys must be indistinguishable from uniformly random.
+all output keys using this shared secret must be indistinguishable from
+uniformly random, and they must be independent from each other.
 
 For this, we use a cascading scheme involving the following:
 
+- __IK(i-1):__ previous intermediate key
 - __ss(i):__ current shared secret
-- __CK(i-1):__ previous chaining key
+- __HK(i):__ current hashed shared secret
 - __CK(i):__ current chaining key
 - __AK(i):__ current authentication key
 - __EK(i):__ current encryption key
+- __IK(i):__ current intermediate key
 
 From the current shared secret and the previous chaining key, we derive
 all current keys thus:
 
     CK(0) = zero
-    CK(i) = HChacha20(ss(i), zero) XOR HChacha20(CK(i-1), one)
+    HK(i) = HChacha20(ss(i), zero)
+    CK(i) = HK(i) XOR IK(i-1)
     AK(i) = Chacha20(CK(i), one)[ 0:31]
     EK(i) = Chacha20(CK(i), one)[32:63]
+    IK(i) = HChacha20(CK(i-1), one)
 
 This is an extract-expand scheme, where __CK(i)__ is extracted from
-__ss(i)__ and __CK(i-1)__, to then be expanded into __AK(i)__,
-__EK(i)__, and __CK(i+1)__.
+__ss(i)__ and __IK(i-1)__, to then be expanded into __AK(i)__,
+__EK(i)__, and __IK(i)__.
 
 __Notation:__ by "random", we mean "indistinguishable from uniformly
 random in a feasible amount of computation".
 
-__Assumption:__ if __ss(i)__ is secret (the attacker doesn't know the
-private halves of the involved keys), then its HChacha20 is random.
-Justification: The NaCl crypto library uses HSalsa20 for its own key
-exchanges.
+__Assumption 1:__ HChacha20 is a random oracle when its input is an
+X25519 shared secret.  Justification: The NaCl crypto library uses
+HSalsa20 for its own key exchanges.
 
-__Theorem:__ if A and B are independent, and at least one of them is
+Therefore, if the attacker doesn't know the private keys involved in the
+ss(i) exchange, then HK(i) will be random.  Moreover, if the attacker
+cannot determine that those private keys are the same as some other
+private key, HK(i) will be _independently_ random.
+
+__Theorem 2:__ if A and B are independent, and at least one of them is
 random, then A XOR B is random. Justification: obvious.
 
-There are 4 cases to consider:
+__Corollary 3:__ if IK(i-1) is an independent random string, then so is
+CK(i).
 
-1. __ss(i)__ is secret and __CK(i-1)__ is random.
-2. __ss(i)__ is secret and __CK(i-1)__ is known.
-3. __ss(i)__ is known and __CK(i-1)__ is random.
-4. __ss(i)__ is known and __CK(i-1)__ is known.
+__Corollary 4:__ if ss(i) is secret then CK(i) is random.
 
-In case (4), the attacker knows __CK(i)__. In the other cases,
-__CK(i)__ is random, and independent from its inputs.  Justification: if
-__CK(i-1)__ is random, its HChacha20 is independently random, and so is
-its XOR with anything else.  Same goes for __ss(i)__.
+__Assumption 5:__ if CK(i) is random, then AK(i), EK(i), and IK(i) are
+independent random strings. Justification: from the security model of
+Chacha20. We have a random key CK(i), and different nonces: AK(i) and
+EK(i) are produced with nonce 1, and IK(i) is produced with nonce 0.
 
-Also, if __CK(i)__ is random, then __AK(i)__ and __EK(i)__ are
-independently random (they use a different nonce from all other Chacha20
-computations).
+__Corollary 6 (induction):__ if IK(i-1) is an independent random
+string, then so are AK(i), EK(i), and IK(i). Justification: from (3) and
+(5).
 
-We can then deduce that for any i and j such that i < j: If any of
-__ss(1)__, __ss(2)__ … __ss(i)__ is secret, then all chaining keys from
-__CK(i)__ to __CK(j)__ are random, and independent from each
-other. Therefore, all keys from __AK(i)__ to __AK(j)__, as well as all
-keys from __EK(i)__ to __EK(j)__, are random, and independent from
-anything else.
+__Corollary 7 (initialisation):__ if ss(1) is secret, then AK(1), EK(1),
+and IK(1) are independent random strings. Justification: from (4) and
+(5).
+
+__Conclusion:__ for any i and j such that i < j, if ss(i) is secret,
+then AK(j) and EK(j) are independently random.
+
+---
 
 We can then apply this to our key exchange:
 
