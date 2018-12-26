@@ -86,6 +86,13 @@ and IK(1) are independent random strings. Justification: from (4) and
 __Conclusion:__ for any i and j such that i < j, if ss(i) is secret,
 then AK(j) and EK(j) are independently random.
 
+__Note:__ IK(i) and HK(i) could use the same counter without affecting
+the analysis. If they did, however, an attacker that knows ss(i-1) and
+controls ss(i) could make ss(i) be HChacha20(ss(i-1)), and eliminate
+ss(i-1) altogether. While the attack doesn't look very practical, or
+even useful, there's no reason to allow it when simply hashing ss(i) and
+ss(i-1) together wouldn't.
+
 ---
 
 We can then apply this to our key exchange:
