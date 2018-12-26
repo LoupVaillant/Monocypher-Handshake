@@ -72,7 +72,8 @@ __Corollary 4:__ if ss(i) is secret then CK(i) is random.
 __Assumption 5:__ if CK(i) is random, then AK(i), EK(i), and IK(i) are
 independent random strings. Justification: from the security model of
 Chacha20. We have a random key CK(i), and different nonces: AK(i) and
-EK(i) are produced with nonce 1, and IK(i) is produced with nonce 0.
+EK(i) are produced with nonce 1 (and counter 0), and IK(i) is produced
+with nonce 0 (and counter 1).
 
 __Corollary 6 (induction):__ if IK(i-1) is an independent random
 string, then so are AK(i), EK(i), and IK(i). Justification: from (3) and
