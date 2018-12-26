@@ -26,7 +26,7 @@ static void kex_update_key(crypto_kex_ctx *ctx,
 
     // Expand (directly from chaining key)
     crypto_chacha_ctx chacha_ctx;
-    crypto_chacha20_init  (&chacha_ctx, ctx->chaining_key, one);
+    crypto_chacha20_init  (&chacha_ctx, ctx->chaining_key, zero);
     crypto_chacha20_stream(&chacha_ctx, ctx->derived_keys, 64);
 
     // Clean up

@@ -38,10 +38,10 @@ Those shared secrets are hashed to derive the following keys:
 - __CK1:__ HChacha20(ee, zero) XOR HChacha20(zero, one)
 - __CK2:__ HChacha20(es, zero) XOR HChacha20(CK1 , one)
 - __CK3:__ HChacha20(se, zero) XOR HChacha20(CK2 , one)
-- __AK2:__ Chacha20(CK2, one)[ 0:31]
-- __EK2:__ Chacha20(CK2, one)[32:63]
-- __AK3:__ Chacha20(CK3, one)[ 0:31]
-- __EK3:__ Chacha20(CK3, one)[32:63]
+- __AK2:__ Chacha20(CK2, zero)[ 0:31]
+- __EK2:__ Chacha20(CK2, zero)[32:63]
+- __AK3:__ Chacha20(CK3, zero)[ 0:31]
+- __EK3:__ Chacha20(CK3, zero)[32:63]
 
 _("[x:y]" denotes a range; zero and one are encoded in little endian
 format)._
@@ -117,10 +117,10 @@ Those shared secrets are hashed to derive the following keys:
 
 - __CK1:__ HChacha20(es, zero) XOR HChacha20(zero, one)
 - __CK2:__ HChacha20(ss, zero) XOR HChacha20(CK1 , one)
-- __AK1:__ Chacha20(CK1, one)[ 0:31]
-- __EK1:__ Chacha20(CK1, one)[32:63]
-- __AK2:__ Chacha20(CK2, one)[ 0:31]
-- __EK2:__ Chacha20(CK2, one)[32:63]
+- __AK1:__ Chacha20(CK1, zero)[ 0:31]
+- __EK1:__ Chacha20(CK1, zero)[32:63]
+- __AK2:__ Chacha20(CK2, zero)[ 0:31]
+- __EK2:__ Chacha20(CK2, zero)[32:63]
 
 _("[x:y]" denotes a range; zero and one are encoded in little endian
 format)._

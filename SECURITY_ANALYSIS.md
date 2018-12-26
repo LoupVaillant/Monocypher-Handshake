@@ -41,9 +41,9 @@ all current keys thus:
     CK(0) = zero
     HK(i) = HChacha20(ss(i), zero)
     CK(i) = HK(i) XOR IK(i-1)
-    AK(i) = Chacha20(CK(i), one)[ 0:31]
-    EK(i) = Chacha20(CK(i), one)[32:63]
-    IK(i) = HChacha20(CK(i-1), one)
+    AK(i) = Chacha20(CK(i), zero)[ 0:31]
+    EK(i) = Chacha20(CK(i), zero)[32:63]
+    IK(i) = HChacha20(CK(i), one)
 
 This is an extract-expand scheme, where __CK(i)__ is extracted from
 __ss(i)__ and __IK(i-1)__, to then be expanded into __AK(i)__,
@@ -72,7 +72,7 @@ __Corollary 4:__ if ss(i) is secret then CK(i) is random.
 __Assumption 5:__ if CK(i) is random, then AK(i), EK(i), and IK(i) are
 independent random strings. Justification: from the security model of
 Chacha20. We have a random key CK(i), and different nonces: AK(i) and
-EK(i) are produced with nonce 1, and IK(i) is produced with nonce 0.
+EK(i) are produced with nonce 0, and IK(i) is produced with nonce 1.
 
 __Corollary 6 (induction):__ if IK(i-1) is an independent random
 string, then so are AK(i), EK(i), and IK(i). Justification: from (3) and
