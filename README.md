@@ -32,33 +32,41 @@ Interactive handshake
 This API is about setting up a secure channel for an interactive
 session.
 
-    void crypto_handshake_request(crypto_handshake_ctx *ctx,
-                                  uint8_t               random_seed[32],
-                                  uint8_t               msg1       [32],
-                                  const uint8_t         remote_pk  [32],
-                                  const uint8_t         local_sk   [32],
-                                  const uint8_t         local_pk   [32]);
+    void crypto_kex_init_client(crypto_kex_ctx *ctx,
+                                uint8_t         random_seed[32],
+                                const uint8_t   local_sk   [32],
+                                const uint8_t   local_pk   [32],
+                                const uint8_t   remote_pk  [32]);
 
-    void crypto_handshake_respond(crypto_handshake_ctx *ctx,
-                                  uint8_t               random_seed[32],
-                                  uint8_t               msg2       [48],
-                                  const uint8_t         msg1       [32],
-                                  const uint8_t         local_sk   [32]);
+    void crypto_kex_init_server(crypto_kex_ctx *ctx,
+                                uint8_t         random_seed[32],
+                                const uint8_t   local_sk   [32],
+                                const uint8_t   local_pk   [32]);
 
-    int crypto_handshake_confirm(crypto_handshake_ctx *ctx,
-                                 uint8_t               session_key[32],
-                                 uint8_t               msg3       [48],
-                                 const uint8_t         msg2       [48]);
+    void crypto_kex_request(crypto_kex_ctx *ctx,
+                            uint8_t         msg1       [32]);
 
-    int crypto_handshake_accept(crypto_handshake_ctx *ctx,
-                                uint8_t               session_key[32],
-                                uint8_t               remote_pk  [32],
-                                const uint8_t         msg3       [48]);
+    void crypto_kex_respond(crypto_kex_ctx *ctx,
+                            uint8_t         msg2       [48],
+                            const uint8_t   msg1       [32]);
 
+    int crypto_kex_confirm(crypto_kex_ctx *ctx,
+                           uint8_t         session_key[32],
+                           uint8_t         msg3       [48],
+                           const uint8_t   msg2       [48]);
 
-The _sender_ will use `crypto_handshake_request()` and
-`crypto_handshake_confirm()`. The _receiver_ will use
+    int crypto_kex_accept(crypto_kex_ctx *ctx,
+                          uint8_t         session_key[32],
+                          uint8_t         remote_pk  [32],
+                          const uint8_t   msg3       [48]);
+
+The _sender_ will use `crypto_kex_init_client()`,
+`crypto_handshake_request()` and `crypto_handshake_confirm()`. The
+_receiver_ will use void `crypto_kex_init_server()`
 `crypto_handshake_respond()` and `crypto_handshake_accept()`.
+
+`crypto_kex_init_client()` and `crypto_kex_init_server()` initialise a
+context for the handshake.
 
 `crypto_handshake_request()` writes the first message, to be sent to the
 recipient.
@@ -90,20 +98,29 @@ authentication altogether, by sending an _anonymous_ message.  For this,
 just use `crypto_key_exchange()` with an ephemeral key pair.  There's no
 need for a specialised API.
 
-    void crypto_send(uint8_t       random_seed[32],
-                     uint8_t       session_key[32],
-                     uint8_t       msg        [80],
-                     const uint8_t remote_pk  [32],
-                     const uint8_t local_sk   [32],
-                     const uint8_t local_pk   [32]);
+    void crypto_kex_init_client(crypto_kex_ctx *ctx,
+                                uint8_t         random_seed[32],
+                                const uint8_t   local_sk   [32],
+                                const uint8_t   local_pk   [32],
+                                const uint8_t   remote_pk  [32]);
 
-    int crypto_receive(uint8_t       random_seed[32],
-                       uint8_t       session_key[32],
-                       uint8_t       remote_pk  [32],
-                       const uint8_t msg        [80],
-                       const uint8_t local_sk   [32]);
+    void crypto_kex_init_server(crypto_kex_ctx *ctx,
+                                uint8_t         random_seed[32],
+                                const uint8_t   local_sk   [32],
+                                const uint8_t   local_pk   [32]);
 
-The _sender_ first writes the message with `crypto_send()`. The
-recipient can then receive and authenticate the message with
-`crypto_receive()`.  The session key can then be used to secure the
+    void crypto_send(crypto_kex_ctx *ctx,
+                     uint8_t         session_key[32],
+                     uint8_t         msg        [80]);
+
+    int crypto_receive(crypto_kex_ctx *ctx,
+                       uint8_t         session_key[32],
+                       uint8_t         remote_pk  [32],
+                       const uint8_t   msg        [80]);
+
+The _sender_ initialises a handshake context with
+`crypto_kex_init_client()`, then writes the message with
+`crypto_send()`. The recipient can then initialise it own context with
+`crypto_kex_init_server()`, then receive and authenticate the message
+with `crypto_receive()`.  The session key can then be used to secure the
 payload.
