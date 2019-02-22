@@ -173,7 +173,7 @@ void crypto_send(crypto_kex_ctx *ctx,
     copy32(session_key, ctx->derived_keys + 32);
 
     // Clean up
-    WIPE_CTX(&ctx);
+    WIPE_CTX(ctx);
 }
 
 int crypto_receive(crypto_kex_ctx *ctx,
@@ -190,6 +190,6 @@ int crypto_receive(crypto_kex_ctx *ctx,
     copy32(remote_pk  , ctx->remote_pk);
     copy32(session_key, ctx->derived_keys + 32);
 
-    WIPE_CTX(&ctx);
+    WIPE_CTX(ctx);
     return 0;
 }
