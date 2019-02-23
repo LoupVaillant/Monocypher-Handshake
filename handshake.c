@@ -105,7 +105,7 @@ void crypto_kex_init_server(crypto_kex_ctx *ctx,
                             const uint8_t   local_pk   [32])
 {
     kex_init(ctx, random_seed, local_sk, local_pk);
-    kex_receive(ctx, ctx->local_pk, local_pk);
+    kex_receive(ctx, ctx->local_pk, ctx->local_pk);
 }
 
 
