@@ -107,7 +107,7 @@ We can then apply this to our key exchange:
 
 1. __AK2__ and __EK2__ are independently random if any of __ee__ or
    __es__ is secret.
-1. __AK2__ and __EK2__ are independently random if any of __ee__,
+1. __AK3__ and __EK3__ are independently random if any of __ee__,
    __es__, or __se__ is secret.
 
 
