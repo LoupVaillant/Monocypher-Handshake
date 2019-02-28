@@ -73,41 +73,41 @@ static void kex_receive(crypto_kex_ctx *ctx,
 }
 
 static void kex_init(crypto_kex_ctx *ctx,
-                     uint8_t         random_seed[32],
-                     const uint8_t   local_sk   [32],
-                     const uint8_t   local_pk   [32])
+                     u8              random_seed[32],
+                     const u8        local_sk   [32],
+                     const u8        local_pk   [32])
 {
-    if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
-    else               copy32                  (ctx->local_pk, local_pk);
+    // Seed & init (everyone)
     copy32(ctx->chaining_key     , zero       );
     copy32(ctx->derived_keys + 32, zero       ); // first encryption key is zero
-    copy32(ctx->local_sk         , local_sk   );
     copy32(ctx->local_ske        , random_seed);
     crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
     crypto_x25519_public_key(ctx->local_pke, ctx->local_ske);
-    ctx->transcript_size  = 0;
+    ctx->transcript_size = 0;
+    // load locals (authenticated parties only)
+    if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
+    else               copy32                  (ctx->local_pk, local_pk);
+    copy32(ctx->local_sk         , local_sk   );
 }
 
-
 void crypto_kex_init_client(crypto_kex_ctx *ctx,
-                            uint8_t         random_seed[32],
-                            const uint8_t   local_sk   [32],
-                            const uint8_t   local_pk   [32],
-                            const uint8_t   remote_pk  [32])
+                            u8              random_seed[32],
+                            const u8        local_sk   [32],
+                            const u8        local_pk   [32],
+                            const u8        remote_pk  [32])
 {
-    kex_init(ctx, random_seed, local_sk, local_pk);
+    kex_init   (ctx, random_seed, local_sk, local_pk);
     kex_receive(ctx, ctx->remote_pk, remote_pk);
 }
 
 void crypto_kex_init_server(crypto_kex_ctx *ctx,
-                            uint8_t         random_seed[32],
-                            const uint8_t   local_sk   [32],
-                            const uint8_t   local_pk   [32])
+                            u8              random_seed[32],
+                            const u8        local_sk   [32],
+                            const u8        local_pk   [32])
 {
-    kex_init(ctx, random_seed, local_sk, local_pk);
+    kex_init   (ctx, random_seed, local_sk, local_pk);
     kex_receive(ctx, ctx->local_pk, ctx->local_pk);
 }
-
 
 void crypto_kex_request(crypto_kex_ctx *ctx, u8 msg1[32])
 {
@@ -135,9 +135,7 @@ int crypto_kex_confirm(crypto_kex_ctx *ctx,
     kex_send      (ctx, msg3           , ctx->local_pk  );  // -> IS
     kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    se
     kex_auth      (ctx, msg3 + 32);                         // auth
-
     copy32(session_key, ctx->derived_keys + 32);
-
     WIPE_CTX(ctx);
     return 0;
 }
@@ -152,7 +150,6 @@ int crypto_kex_accept(crypto_kex_ctx *ctx,
     if (kex_verify(ctx, msg3 + 32)) { return -1; }          // verify
     copy32(remote_pk  , ctx->remote_pk);
     copy32(session_key, ctx->derived_keys + 32);
-
     WIPE_CTX(ctx);
     return 0;
 }
@@ -166,10 +163,7 @@ void crypto_send(crypto_kex_ctx *ctx,
     kex_send      (ctx, msg + 32      , ctx->local_pk );    // -> IS
     kex_update_key(ctx, ctx->local_sk , ctx->remote_pk);    //    ss
     kex_auth      (ctx, msg + 64);                          // auth
-
     copy32(session_key, ctx->derived_keys + 32);
-
-    // Clean up
     WIPE_CTX(ctx);
 }
 
@@ -183,10 +177,8 @@ int crypto_receive(crypto_kex_ctx *ctx,
     kex_receive   (ctx, ctx->remote_pk , msg + 32       );  // -> IS
     kex_update_key(ctx, ctx->local_sk  , ctx->remote_pk );  //    ss
     if (kex_verify(ctx, msg + 64)) { return -1; }           // verify
-
     copy32(remote_pk  , ctx->remote_pk);
     copy32(session_key, ctx->derived_keys + 32);
-
     WIPE_CTX(ctx);
     return 0;
 }
