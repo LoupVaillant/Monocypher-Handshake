@@ -76,8 +76,7 @@ handshake without assuming any prior exchange), is much simpler.
 __Why keys are derived with HChacha20 instead of HKDF?__ The handshake
 is intened to be used for a ChachaPoly based AEAD session.  Using
 HChacha20 allows us to avoid brining in another primitive.  It's also
-faster than HKDF.  Safety wise, the thing looks legit. (TODO: security
-reduction).
+faster than HKDF.
 
 
 One way Handshake design
