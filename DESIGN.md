@@ -22,16 +22,16 @@ Protocol description
 Sender and recipient have the following X25519 key pairs (private half
 in lower case, public half in upper case):
 
-- __(es, ES)__ The sender's ephemeral key.
-- __(ls, LS)__ The sender's long term key.
-- __(er, ER)__ The recipient's ephemeral key.
-- __(lr, LR)__ The recipient's long term key.
+- __(is, IS)__ The initiator's static key.
+- __(ie, IE)__ The initiator's ephemeral key.
+- __(rs, RS)__ The respondent's static key.
+- __(re, RE)__ The respondent's ephemeral key.
 
 Those key pairs are used to derive the following shared secrets:
 
-- __ee__ = X25519(es, ER) = X25519(er, ES)
-- __es__ = X25519(es, LR) = X25519(lr, ES)
-- __se__ = X25519(ls, ER) = X25519(er, LS)
+- __ee__ = X25519(ie, RE) = X25519(re, IE)
+- __es__ = X25519(ie, RS) = X25519(rs, IE)
+- __se__ = X25519(is, RE) = X25519(re, IS)
 
 Those shared secrets are hashed to derive the following keys:
 
@@ -39,30 +39,32 @@ Those shared secrets are hashed to derive the following keys:
 - __CK2:__ HChacha20(es, zero) XOR HChacha20(CK1 , one)
 - __CK3:__ HChacha20(se, zero) XOR HChacha20(CK2 , one)
 - __AK2:__ Chacha20(CK2, one)[ 0:31]
-- __EK2:__ Chacha20(CK2, one)[32:63]
 - __AK3:__ Chacha20(CK3, one)[ 0:31]
+- __EK2:__ Chacha20(CK2, one)[32:63]
 - __EK3:__ Chacha20(CK3, one)[32:63]
 
 _("[x:y]" denotes a range; zero and one are encoded in little endian
-format)._
+format.)_
 
 The messages contain the following (`||` denotes concatenation):
 
-    XS           = LS XOR EK2
+    XIS  = IS XOR EK2
 
-    request      = ES
-    response     = ER || Poly1305(AK2, LR || ES || ER)
-    confirmation = XS || Poly1305(AK3, LR || ES || ER || XS)
+    msg1 = IE
+    msg2 = RE  || Poly1305(AK2, RS || IE || RE)
+    msg3 = XIS || Poly1305(AK3, RS || IE || RE || XIS)
 
+Note that RS is shared in advance.
 The handshake proceeds as follows:
 
-1. The sender sends the _request_ to the recipient.
-2. The recipient receives the request, then sends its _response_.
-3. The sender verifies the response, and aborts if it fails.
-4. The sender sends its _confirmation_ to the recipient.
-5. The recipient verifies the confirmation, and aborts if it fails.
-6. The recipient decrypts & records the sender's transmitted public key.
-7. The protocol is complete. The session key is _EK3_.
+- The initiator sends msg1 to the respondent.
+- The respondent receives msg1.
+- The respondent sends msg2 to the initiator.
+- The initiator verifies msg2, and aborts if it fails.
+- The initiator sends msg3 to the respondent.
+- The respondent verifies msg3, and aborts if it fails.
+- The respondent checks the initiator's static key, and aborts if it fails.
+- The protocol is complete.  The session key is EK3.
 
 
 Rationale
@@ -103,38 +105,39 @@ Protocol description
 Sender and recipient have the following X25519 key pairs (private half
 in lower case, public half in upper case):
 
-- __(es, ES)__ The sender's ephemeral key.
-- __(ls, LS)__ The sender's long term key.
-- __(lr, LR)__ The recipient's long term key.
+- __(is, IS)__ The initiator's static key.
+- __(ie, IE)__ The initiator's ephemeral key.
+- __(rs, RS)__ The respondent's static key.
 
 Those key pairs are used to derive the following shared secrets:
 
-- __es__ = X25519(es, LR) = X25519(lr, ES)
-- __ss__ = X25519(ls, LR) = X25519(lr, LS)
+- __es__ = X25519(ie, RS) = X25519(rs, IE)
+- __ss__ = X25519(is, RS) = X25519(rs, IS)
 
 Those shared secrets are hashed to derive the following keys:
 
 - __CK1:__ HChacha20(es, zero) XOR HChacha20(zero, one)
 - __CK2:__ HChacha20(ss, zero) XOR HChacha20(CK1 , one)
-- __AK1:__ Chacha20(CK1, one)[ 0:31]
-- __EK1:__ Chacha20(CK1, one)[32:63]
 - __AK2:__ Chacha20(CK2, one)[ 0:31]
+- __EK1:__ Chacha20(CK1, one)[32:63]
 - __EK2:__ Chacha20(CK2, one)[32:63]
 
 _("[x:y]" denotes a range; zero and one are encoded in little endian
-format)._
+format.)_
 
-The message contain the following (`||` denotes concatenation):
+The messages contain the following (`||` denotes concatenation):
 
-    XS      = LS XOR EK1
-    message = ES || XS || Poly1305(AK2, LR || ES || XS)
+    XIS  = IS XOR EK1
 
+    msg1 = IE || XIS || Poly1305(AK2, RS || IE || XIS)
+
+Note that RS is shared in advance.
 The handshake proceeds as follows:
 
-1. The sender sends the _message_ to the recipient.
-2. The recipient decrypts & records the sender's transmitted public key.
-3. The recipient verifies the message, and aborts if it fails.
-4. The protocol is complete. The session key is _EK2_.
+- The initiator sends msg1 to the respondent.
+- The respondent verifies msg1, and aborts if it fails.
+- The respondent checks the initiator's static key, and aborts if it fails.
+- The protocol is complete.  The session key is EK2.
 
 
 Rationale

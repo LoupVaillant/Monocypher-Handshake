@@ -111,15 +111,15 @@ void crypto_kex_init_server(crypto_kex_ctx *ctx,
 
 void crypto_kex_request(crypto_kex_ctx *ctx, u8 msg1[32])
 {
-    kex_send      (ctx, msg1           , ctx->local_pke );  // -> ES
+    kex_send      (ctx, msg1           , ctx->local_pke );  // -> IE
 }
 
 void crypto_kex_respond(crypto_kex_ctx *ctx, u8 msg2[48], const u8 msg1[32])
 {
-    kex_receive   (ctx, ctx->remote_pke, msg1           );  // -> ES
-    kex_send      (ctx, msg2           , ctx->local_pke );  // <- ER
-    kex_update_key(ctx, ctx->local_ske , ctx->remote_pke);  // <ee>
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  // <el>
+    kex_receive   (ctx, ctx->remote_pke, msg1           );  // -> IE
+    kex_send      (ctx, msg2           , ctx->local_pke );  // <- RE
+    kex_update_key(ctx, ctx->local_ske , ctx->remote_pke);  //    ee
+    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    es
     kex_auth      (ctx, msg2 + 32);                         // auth
 }
 
@@ -128,12 +128,12 @@ int crypto_kex_confirm(crypto_kex_ctx *ctx,
                        u8              msg3       [48],
                        const u8        msg2       [48])
 {
-    kex_receive   (ctx, ctx->remote_pke, msg2           );  // <- ER
-    kex_update_key(ctx, ctx->local_ske , ctx->remote_pke);  // <ee>
-    kex_update_key(ctx, ctx->local_ske , ctx->remote_pk );  // <el>
+    kex_receive   (ctx, ctx->remote_pke, msg2           );  // <- RE
+    kex_update_key(ctx, ctx->local_ske , ctx->remote_pke);  //    ee
+    kex_update_key(ctx, ctx->local_ske , ctx->remote_pk );  //    es
     if (kex_verify(ctx, msg2 + 32)) { return -1; }          // verify
-    kex_send      (ctx, msg3           , ctx->local_pk  );  // -> LS
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  // <le>
+    kex_send      (ctx, msg3           , ctx->local_pk  );  // -> IS
+    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    se
     kex_auth      (ctx, msg3 + 32);                         // auth
 
     copy32(session_key, ctx->derived_keys + 32);
@@ -147,8 +147,8 @@ int crypto_kex_accept(crypto_kex_ctx *ctx,
                       u8              remote_pk  [32],
                       const u8        msg3       [48])
 {
-    kex_receive   (ctx, ctx->remote_pk, msg3          );    // -> LS
-    kex_update_key(ctx, ctx->local_ske, ctx->remote_pk);    // <le>
+    kex_receive   (ctx, ctx->remote_pk, msg3          );    // -> IS
+    kex_update_key(ctx, ctx->local_ske, ctx->remote_pk);    //    se
     if (kex_verify(ctx, msg3 + 32)) { return -1; }          // verify
     copy32(remote_pk  , ctx->remote_pk);
     copy32(session_key, ctx->derived_keys + 32);
@@ -161,10 +161,10 @@ void crypto_send(crypto_kex_ctx *ctx,
                  u8              session_key[32],
                  u8              msg        [80])
 {
-    kex_send      (ctx, msg           , ctx->local_pke);    // -> ES
-    kex_update_key(ctx, ctx->local_ske, ctx->remote_pk);    // <el>
-    kex_send      (ctx, msg + 32      , ctx->local_pk );    // -> LS
-    kex_update_key(ctx, ctx->local_sk , ctx->remote_pk);    // <ll>
+    kex_send      (ctx, msg           , ctx->local_pke);    // -> IE
+    kex_update_key(ctx, ctx->local_ske, ctx->remote_pk);    //    es
+    kex_send      (ctx, msg + 32      , ctx->local_pk );    // -> IS
+    kex_update_key(ctx, ctx->local_sk , ctx->remote_pk);    //    ss
     kex_auth      (ctx, msg + 64);                          // auth
 
     copy32(session_key, ctx->derived_keys + 32);
@@ -178,10 +178,10 @@ int crypto_receive(crypto_kex_ctx *ctx,
                    u8              remote_pk  [32],
                    const u8        msg        [80])
 {
-    kex_receive   (ctx, ctx->remote_pke, msg            );  // -> ES
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  // <el>
-    kex_receive   (ctx, ctx->remote_pk , msg + 32       );  // -> LS
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pk );  // <ll>
+    kex_receive   (ctx, ctx->remote_pke, msg            );  // -> IE
+    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    es
+    kex_receive   (ctx, ctx->remote_pk , msg + 32       );  // -> IS
+    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pk );  //    ss
     if (kex_verify(ctx, msg + 64)) { return -1; }           // verify
 
     copy32(remote_pk  , ctx->remote_pk);
