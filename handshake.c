@@ -131,10 +131,7 @@ int crypto_kex_confirm(crypto_kex_ctx *ctx,
     kex_receive   (ctx, ctx->remote_pke, msg2           );  // <- ER
     kex_update_key(ctx, ctx->local_ske , ctx->remote_pke);  // <ee>
     kex_update_key(ctx, ctx->local_ske , ctx->remote_pk );  // <el>
-    if (kex_verify(ctx, msg2 + 32)) {                       // verify
-        FOR (i, 0, 48) { msg3[i] = 0; }
-        return -1;
-    }
+    if (kex_verify(ctx, msg2 + 32)) { return -1; }          // verify
     kex_send      (ctx, msg3           , ctx->local_pk  );  // -> LS
     kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  // <le>
     kex_auth      (ctx, msg3 + 32);                         // auth
