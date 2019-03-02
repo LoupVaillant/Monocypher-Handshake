@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <monocypher.h>
-#include "handshake.h"
+#include "monokex.h"
 #include "utils.h"
 
 static const uint8_t zero[32] = {0};
@@ -157,21 +157,21 @@ static int vectors_xk1_test(test_vectors_xk1 *v,
     crypto_kex_ctx server_ctx;
     uint8_t        c_seed[32];  copy(c_seed, client_seed);
     uint8_t        s_seed[32];  copy(s_seed, server_seed);
-    crypto_kex_init_client(&client_ctx, c_seed, client_sk, 0, v->RS);
-    crypto_kex_init_server(&server_ctx, s_seed, server_sk, 0);
+    crypto_kex_xk1_init_client(&client_ctx, c_seed, client_sk, 0, v->RS);
+    crypto_kex_xk1_init_server(&server_ctx, s_seed, server_sk, 0);
 
-    crypto_kex_request(&client_ctx, v->msg1);
-    crypto_kex_respond(&server_ctx, v->msg2, v->msg1);
+    crypto_kex_xk1_1(&client_ctx, v->msg1);
+    crypto_kex_xk1_2(&server_ctx, v->msg2, v->msg1);
 
     u8 client_key[32];
     u8 server_key[32];
     u8 remote_pk [32]; // same as v->IS
     int ok = 0;
-    ok |= assert_zero(crypto_kex_confirm(&client_ctx, client_key,
-                                         v->msg3, v->msg2),
+    ok |= assert_zero(crypto_kex_xk1_3(&client_ctx, client_key,
+                                       v->msg3, v->msg2),
                       "Cannot confirm");
-    ok |= assert_zero(crypto_kex_accept(&server_ctx, server_key,
-                                        remote_pk, v->msg3),
+    ok |= assert_zero(crypto_kex_xk1_4(&server_ctx, server_key,
+                                       remote_pk, v->msg3),
                       "Cannot accept");
     ok |= assert_equal(client_key, server_key, 32, "Different session keys");
     ok |= assert_equal(remote_pk, v->IS, 32,
@@ -335,16 +335,15 @@ static int vectors_x_test(test_vectors_x *v,
     crypto_kex_ctx client_ctx;
     crypto_kex_ctx server_ctx;
     uint8_t        c_seed[32];  copy(c_seed, client_seed);
-    uint8_t        s_seed[32] = {0}; // TODO: we don't use the server seed
-    crypto_kex_init_client(&client_ctx, c_seed, client_sk, 0, v->RS);
-    crypto_kex_init_server(&server_ctx, s_seed, server_sk, 0);
+    crypto_kex_x_init_client(&client_ctx, c_seed, client_sk, 0, v->RS);
+    crypto_kex_x_init_server(&server_ctx, server_sk, 0);
 
     u8 client_key[32];
     u8 server_key[32];
     u8 remote_pk [32]; // same as v->IS
     int ok = 0;
-    crypto_send(&client_ctx, client_key, v->msg1);
-    ok |= assert_zero(crypto_receive(&server_ctx, server_key,
+    crypto_kex_x_1(&client_ctx, client_key, v->msg1);
+    ok |= assert_zero(crypto_kex_x_2(&server_ctx, server_key,
                                      remote_pk, v->msg1),
                       "Cannot receive");
     ok |= assert_equal(client_key, server_key, 32, "Different session keys");

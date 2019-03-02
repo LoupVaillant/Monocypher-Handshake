@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <monocypher.h>
-#include "handshake.h"
+#include "monokex.h"
 #include "utils.h"
 
 int main()
@@ -14,29 +14,30 @@ int main()
         u8 server_pk[32];  crypto_key_exchange_public_key(server_pk, server_sk);
 
         crypto_kex_ctx client_ctx;
-        crypto_kex_init_client(&client_ctx, client_seed, client_sk, client_pk,
-                               server_pk);
+        crypto_kex_xk1_init_client(&client_ctx, client_seed,
+                                   client_sk, client_pk, server_pk);
         crypto_kex_ctx server_ctx;
-        crypto_kex_init_server(&server_ctx, server_seed, server_sk, server_pk);
+        crypto_kex_xk1_init_server(&server_ctx, server_seed,
+                                   server_sk, server_pk);
 
         u8 msg1[32];
-        crypto_kex_request(&client_ctx, msg1);
+        crypto_kex_xk1_1(&client_ctx, msg1);
 
         u8 msg2[48];
-        crypto_kex_respond(&server_ctx, msg2, msg1);
+        crypto_kex_xk1_2(&server_ctx, msg2, msg1);
 
         u8 client_session_key[32];
         u8 msg3[48];
-        if (crypto_kex_confirm(&client_ctx, client_session_key,
-                               msg3, msg2)) {
+        if (crypto_kex_xk1_3(&client_ctx, client_session_key,
+                             msg3, msg2)) {
             fprintf(stderr, "Cannot confirm\n");
             return 1;
         }
 
         u8 server_session_key[32];
         u8 remote_pk         [32]; // same as client_pk
-        if (crypto_kex_accept(&server_ctx, server_session_key, remote_pk,
-                              msg3)) {
+        if (crypto_kex_xk1_4(&server_ctx, server_session_key, remote_pk,
+                             msg3)) {
             fprintf(stderr, "Cannot accept\n");
             return 1;
         }
@@ -61,18 +62,19 @@ int main()
         u8 server_pk[32];  crypto_key_exchange_public_key(server_pk, server_sk);
 
         crypto_kex_ctx client_ctx;
-        crypto_kex_init_client(&client_ctx, client_seed, client_sk, client_pk,
-                               server_pk);
+        crypto_kex_x_init_client(&client_ctx, client_seed,
+                                 client_sk, client_pk, server_pk);
         crypto_kex_ctx server_ctx;
-        crypto_kex_init_server(&server_ctx, server_seed, server_sk, server_pk);
+        crypto_kex_x_init_server(&server_ctx, server_sk, server_pk);
 
         u8 client_session_key[32];
         u8 msg               [80];
-        crypto_send(&client_ctx, client_session_key, msg);
+        crypto_kex_x_1(&client_ctx, client_session_key, msg);
 
         u8 server_session_key[32];
         u8 remote_pk         [32]; // same as client_pk
-        if (crypto_receive(&server_ctx, server_session_key, remote_pk, msg)) {
+        if (crypto_kex_x_2(&server_ctx, server_session_key,
+                           remote_pk, msg)) {
             fprintf(stderr, "Cannot receive\n");
             return 1;
         }

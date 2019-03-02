@@ -5,7 +5,7 @@ CFLAGS= -pedantic -Wall -Wextra -O3 -march=native -g
         check test vectors speed \
         clean
 
-all: handshake.o
+all: monokex.o
 
 check: test
 test: test.out
@@ -18,16 +18,16 @@ speed: speed.out
 clean:
 	rm -rf *.out *.o
 
-handshake.o: handshake.c     handshake.h
-test.o     : test.c  utils.h handshake.h
-speed.o    : speed.c utils.h handshake.h
-handshake.o test.o speed.o:
+monokex.o  : monokex.c     monokex.h
+test.o     : test.c  utils.h monokex.h
+speed.o    : speed.c utils.h monokex.h
+monokex.o test.o speed.o:
 	$(CC) $(CFLAGS) -c -o $@ $< \
             $$(pkg-config --cflags monocypher)
 
-test.out   : test.o    handshake.o
-vectors.out: vectors.o handshake.o
-speed.out  : speed.o   handshake.o
+test.out   : test.o    monokex.o
+vectors.out: vectors.o monokex.o
+speed.out  : speed.o   monokex.o
 test.out vectors.out speed.out:
 	$(CC) $(CFLAGS) -o $@ $^               \
             $$(pkg-config --cflags monocypher) \
