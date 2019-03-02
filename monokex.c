@@ -107,10 +107,10 @@ void crypto_kex_xk1_init_client(crypto_kex_ctx *ctx,
                                 const uint8_t   local_pk   [32],
                                 const uint8_t   remote_pk  [32])
 {
-kex_init   (ctx);
-kex_seed   (ctx, random_seed);
-kex_locals (ctx, local_sk, local_pk);
-kex_receive(ctx, ctx->remote_pk, remote_pk);
+    kex_init   (ctx);
+    kex_seed   (ctx, random_seed);
+    kex_locals (ctx, local_sk, local_pk);
+    kex_receive(ctx, ctx->remote_pk, remote_pk);
 }
 
 void crypto_kex_xk1_init_server(crypto_kex_ctx *ctx,
@@ -118,10 +118,10 @@ void crypto_kex_xk1_init_server(crypto_kex_ctx *ctx,
                                 const uint8_t   local_sk   [32],
                                 const uint8_t   local_pk   [32])
 {
-kex_init   (ctx);
-kex_seed   (ctx, random_seed);
-kex_locals (ctx, local_sk, local_pk);
-kex_receive(ctx, ctx->local_pk, ctx->local_pk);
+    kex_init   (ctx);
+    kex_seed   (ctx, random_seed);
+    kex_locals (ctx, local_sk, local_pk);
+    kex_receive(ctx, ctx->local_pk, ctx->local_pk);
 }
 
 void crypto_kex_xk1_1(crypto_kex_ctx *ctx,
@@ -181,19 +181,19 @@ void crypto_kex_x_init_client(crypto_kex_ctx *ctx,
                               const uint8_t   local_pk   [32],
                               const uint8_t   remote_pk  [32])
 {
-kex_init   (ctx);
-kex_seed   (ctx, random_seed);
-kex_locals (ctx, local_sk, local_pk);
-kex_receive(ctx, ctx->remote_pk, remote_pk);
+    kex_init   (ctx);
+    kex_seed   (ctx, random_seed);
+    kex_locals (ctx, local_sk, local_pk);
+    kex_receive(ctx, ctx->remote_pk, remote_pk);
 }
 
 void crypto_kex_x_init_server(crypto_kex_ctx *ctx,
                               const uint8_t   local_sk   [32],
                               const uint8_t   local_pk   [32])
 {
-kex_init   (ctx);
-kex_locals (ctx, local_sk, local_pk);
-kex_receive(ctx, ctx->local_pk, ctx->local_pk);
+    kex_init   (ctx);
+    kex_locals (ctx, local_sk, local_pk);
+    kex_receive(ctx, ctx->local_pk, ctx->local_pk);
 }
 
 void crypto_kex_x_1(crypto_kex_ctx *ctx,
