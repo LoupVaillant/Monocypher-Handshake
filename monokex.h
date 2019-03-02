@@ -66,3 +66,4 @@ int crypto_kex_x_2(crypto_kex_ctx *ctx,
                    uint8_t         session_key[32],
                    uint8_t         remote_pk[32],
                    const uint8_t   msg1[80]);
+
