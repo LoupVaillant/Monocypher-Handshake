@@ -35,16 +35,18 @@ Those key pairs are used to derive the following shared secrets:
 
 Those shared secrets are hashed to derive the following keys:
 
-- __CK1:__ HChacha20(ee, zero) XOR HChacha20(zero, one)
-- __CK2:__ HChacha20(es, zero) XOR HChacha20(CK1 , one)
-- __CK3:__ HChacha20(se, zero) XOR HChacha20(CK2 , one)
+- __CK0:__ "Monokex XK1"
+- __CK1:__ HChacha20(ee, zero) XOR HChacha20(CK0, one)
+- __CK2:__ HChacha20(es, zero) XOR HChacha20(CK1, one)
+- __CK3:__ HChacha20(se, zero) XOR HChacha20(CK2, one)
 - __AK2:__ Chacha20(CK2, one)[ 0:31]
 - __AK3:__ Chacha20(CK3, one)[ 0:31]
 - __EK2:__ Chacha20(CK2, one)[32:63]
 - __EK3:__ Chacha20(CK3, one)[32:63]
+- __PK2:__ Chacha20(CK2, two)[ 0:31]
 
 _("[x:y]" denotes a range; zero and one are encoded in little endian
-format.)_
+format.  CK0 is 32 bytes, ASCII encoded, zero padded.)_
 
 The messages contain the following (`||` denotes concatenation):
 
@@ -116,14 +118,15 @@ Those key pairs are used to derive the following shared secrets:
 
 Those shared secrets are hashed to derive the following keys:
 
-- __CK1:__ HChacha20(es, zero) XOR HChacha20(zero, one)
-- __CK2:__ HChacha20(ss, zero) XOR HChacha20(CK1 , one)
+- __CK0:__ "Monokex X"
+- __CK1:__ HChacha20(es, zero) XOR HChacha20(CK0, one)
+- __CK2:__ HChacha20(ss, zero) XOR HChacha20(CK1, one)
 - __AK2:__ Chacha20(CK2, one)[ 0:31]
 - __EK1:__ Chacha20(CK1, one)[32:63]
 - __EK2:__ Chacha20(CK2, one)[32:63]
 
 _("[x:y]" denotes a range; zero and one are encoded in little endian
-format.)_
+format.  CK0 is 32 bytes, ASCII encoded, zero padded.)_
 
 The messages contain the following (`||` denotes concatenation):
 

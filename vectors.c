@@ -63,6 +63,7 @@ typedef struct {
     uint8_t se[32];
 
     // Symmetric keys
+    uint8_t CK0[32];
     uint8_t CK1[32];
     uint8_t CK2[32];
     uint8_t CK3[32];
@@ -103,8 +104,9 @@ static void vectors_xk1_fill(test_vectors_xk1 *v,
     // Keys
     uint8_t tmp1[32];
     uint8_t tmp2[32];
+    uint8_t CK0 [32] = "Monokex XK1";
     crypto_chacha20_H(tmp1, v->ee , zero);
-    crypto_chacha20_H(tmp2, zero  , one );
+    crypto_chacha20_H(tmp2, CK0   , one );
     xor(v->CK1, tmp1, tmp2);
     crypto_chacha20_H(tmp1, v->es , zero);
     crypto_chacha20_H(tmp2, v->CK1, one );
@@ -263,6 +265,7 @@ typedef struct {
     uint8_t ss[32];
 
     // Symmetric Keys
+    uint8_t CK0[32];
     uint8_t CK1[32];
     uint8_t CK2[32];
     uint8_t AK2[32];
@@ -295,8 +298,9 @@ static void vectors_x_fill(test_vectors_x *v,
     // Keys
     uint8_t tmp1[32];
     uint8_t tmp2[32];
+    uint8_t CK0 [32] = "Monokex X";
     crypto_chacha20_H(tmp1, v->es , zero);
-    crypto_chacha20_H(tmp2, zero  , one );
+    crypto_chacha20_H(tmp2, CK0   , one );
     xor(v->CK1, tmp1, tmp2);
     crypto_chacha20_H(tmp1, v->ss , zero);
     crypto_chacha20_H(tmp2, v->CK1, one );

@@ -75,9 +75,12 @@ static void kex_receive(crypto_kex_ctx *ctx,
     xor32(dest, ctx->derived_keys + 32);
 }
 
-static void kex_init(crypto_kex_ctx *ctx)
+static void kex_init(crypto_kex_ctx *ctx, const char* id)
 {
-    copy32(ctx->chaining_key     , zero);
+    copy32(ctx->chaining_key, zero);
+    for (size_t i = 0; id[i] != '\0'; i++) {
+        ctx->chaining_key[i] = id[i];
+    }
     copy32(ctx->derived_keys + 32, zero);  // first encryption key is zero
     ctx->transcript_size = 0;
 }
@@ -90,8 +93,8 @@ static void kex_seed(crypto_kex_ctx *ctx, uint8_t random_seed[32])
 }
 
 static void kex_locals(crypto_kex_ctx *ctx,
-                       const uint8_t   local_sk   [32],
-                       const uint8_t   local_pk   [32])
+                       const uint8_t   local_sk[32],
+                       const uint8_t   local_pk[32])
 {
     if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
     else               copy32                  (ctx->local_pk, local_pk);
@@ -107,7 +110,7 @@ void crypto_kex_xk1_init_client(crypto_kex_ctx *ctx,
                                 const uint8_t   local_pk   [32],
                                 const uint8_t   remote_pk  [32])
 {
-    kex_init   (ctx);
+    kex_init   (ctx, "Monokex XK1");
     kex_seed   (ctx, random_seed);
     kex_locals (ctx, local_sk, local_pk);
     kex_receive(ctx, ctx->remote_pk, remote_pk);
@@ -118,7 +121,7 @@ void crypto_kex_xk1_init_server(crypto_kex_ctx *ctx,
                                 const uint8_t   local_sk   [32],
                                 const uint8_t   local_pk   [32])
 {
-    kex_init   (ctx);
+    kex_init   (ctx, "Monokex XK1");
     kex_seed   (ctx, random_seed);
     kex_locals (ctx, local_sk, local_pk);
     kex_receive(ctx, ctx->local_pk, ctx->local_pk);
@@ -181,7 +184,7 @@ void crypto_kex_x_init_client(crypto_kex_ctx *ctx,
                               const uint8_t   local_pk   [32],
                               const uint8_t   remote_pk  [32])
 {
-    kex_init   (ctx);
+    kex_init   (ctx, "Monokex X");
     kex_seed   (ctx, random_seed);
     kex_locals (ctx, local_sk, local_pk);
     kex_receive(ctx, ctx->remote_pk, remote_pk);
@@ -191,7 +194,7 @@ void crypto_kex_x_init_server(crypto_kex_ctx *ctx,
                               const uint8_t   local_sk   [32],
                               const uint8_t   local_pk   [32])
 {
-    kex_init   (ctx);
+    kex_init   (ctx, "Monokex X");
     kex_locals (ctx, local_sk, local_pk);
     kex_receive(ctx, ctx->local_pk, ctx->local_pk);
 }
