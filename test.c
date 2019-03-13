@@ -13,10 +13,10 @@ int main()
         u8 client_pk[32];  crypto_key_exchange_public_key(client_pk, client_sk);
         u8 server_pk[32];  crypto_key_exchange_public_key(server_pk, server_sk);
 
-        crypto_kex_ctx client_ctx;
+        crypto_kex_client_ctx client_ctx;
         crypto_kex_xk1_init_client(&client_ctx, client_seed,
                                    client_sk, client_pk, server_pk);
-        crypto_kex_ctx server_ctx;
+        crypto_kex_server_ctx server_ctx;
         crypto_kex_xk1_init_server(&server_ctx, server_seed,
                                    server_sk, server_pk);
 
@@ -61,10 +61,10 @@ int main()
         u8 client_pk[32];  crypto_key_exchange_public_key(client_pk, client_sk);
         u8 server_pk[32];  crypto_key_exchange_public_key(server_pk, server_sk);
 
-        crypto_kex_ctx client_ctx;
+        crypto_kex_client_ctx client_ctx;
         crypto_kex_x_init_client(&client_ctx, client_seed,
                                  client_sk, client_pk, server_pk);
-        crypto_kex_ctx server_ctx;
+        crypto_kex_server_ctx server_ctx;
         crypto_kex_x_init_server(&server_ctx, server_sk, server_pk);
 
         u8 client_session_key[32];
