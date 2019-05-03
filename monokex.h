@@ -34,38 +34,19 @@ void crypto_kex_xk1_init_server(crypto_kex_server_ctx *server_ctx,
 void crypto_kex_xk1_1(crypto_kex_client_ctx *client_ctx,
                       uint8_t                msg1      [48]);
 
-void crypto_kex_xk1_p1(crypto_kex_client_ctx *client_ctx,
-                       uint8_t                msg1      [32]);
-
 void crypto_kex_xk1_2(crypto_kex_server_ctx *server_ctx,
                       uint8_t                msg2      [48],
                       const uint8_t          msg1      [48]);
-
-void crypto_kex_xk1_p2(crypto_kex_server_ctx *server_ctx,
-                       uint8_t                payload_key2[32],
-                       uint8_t                msg2        [48],
-                       const uint8_t          msg1        [32]);
 
 int crypto_kex_xk1_3(crypto_kex_client_ctx *client_ctx,
                      uint8_t                session_key[32],
                      uint8_t                msg3       [48],
                      const uint8_t          msg2       [48]);
 
-int crypto_kex_xk1_p3(crypto_kex_client_ctx *client_ctx,
-                      uint8_t                payload_key2[32],
-                      uint8_t                session_key [32],
-                      uint8_t                msg3        [48],
-                      const uint8_t          msg2        [48]);
-
 int crypto_kex_xk1_4(crypto_kex_server_ctx *server_ctx,
                      uint8_t                session_key[32],
                      uint8_t                client_pk  [32],
                      const uint8_t          msg3       [48]);
-
-int crypto_kex_xk1_p4(crypto_kex_server_ctx *server_ctx,
-                      uint8_t                session_key[32],
-                      uint8_t                client_pk  [32],
-                      const uint8_t          msg3       [48]);
 
 /////////
 /// X ///
@@ -84,17 +65,7 @@ void crypto_kex_x_1(crypto_kex_client_ctx *client_ctx,
                     uint8_t                session_key[32],
                     uint8_t                msg1       [80]);
 
-void crypto_kex_x_p1(crypto_kex_client_ctx *client_ctx,
-                     uint8_t                session_key[32],
-                     uint8_t                msg1       [80]);
-
 int crypto_kex_x_2(crypto_kex_server_ctx *server_ctx,
                    uint8_t                session_key[32],
                    uint8_t                client_pk  [32],
                    const uint8_t          msg1       [80]);
-
-int crypto_kex_x_p2(crypto_kex_server_ctx *server_ctx,
-                    uint8_t                session_key[32],
-                    uint8_t                client_pk  [32],
-                    const uint8_t          msg1       [80]);
-

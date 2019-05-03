@@ -141,29 +141,9 @@ void crypto_kex_xk1_1(crypto_kex_client_ctx *client_ctx,
     for (size_t i = 32; i < 48; i++) { msg1[i] = 0; }
 }
 
-void crypto_kex_xk1_p1(crypto_kex_client_ctx *client_ctx,
-                       uint8_t                msg1      [32])
-{
-    crypto_kex_ctx *ctx = &(client_ctx->ctx);
-    kex_send      (ctx, msg1           , ctx->local_pke );  // -> IE
-}
-
 void crypto_kex_xk1_2(crypto_kex_server_ctx *server_ctx,
                       uint8_t                msg2      [48],
                       const uint8_t          msg1      [48])
-{
-    crypto_kex_ctx *ctx = &(server_ctx->ctx);
-    kex_receive   (ctx, ctx->remote_pke, msg1           );  // -> IE
-    kex_send      (ctx, msg2           , ctx->local_pke );  // <- RE
-    kex_update_key(ctx, ctx->local_ske , ctx->remote_pke);  //    ee
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    es
-    kex_auth      (ctx, msg2 + 32);                         // auth
-}
-
-void crypto_kex_xk1_p2(crypto_kex_server_ctx *server_ctx,
-                       uint8_t                payload_key2[32],
-                       uint8_t                msg2        [48],
-                       const uint8_t          msg1        [32])
 {
     crypto_kex_ctx *ctx = &(server_ctx->ctx);
     kex_receive   (ctx, ctx->remote_pke, msg1           );  // -> IE
@@ -191,44 +171,10 @@ int crypto_kex_xk1_3(crypto_kex_client_ctx *client_ctx,
     return 0;
 }
 
-int crypto_kex_xk1_p3(crypto_kex_client_ctx *client_ctx,
-                      uint8_t                payload_key2[32],
-                      uint8_t                session_key [32],
-                      uint8_t                msg3        [48],
-                      const uint8_t          msg2        [48])
-{
-    crypto_kex_ctx *ctx = &(client_ctx->ctx);
-    kex_receive   (ctx, ctx->remote_pke, msg2           );  // <- RE
-    kex_update_key(ctx, ctx->local_ske , ctx->remote_pke);  //    ee
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    es
-    if (kex_verify(ctx, msg2 + 32)) { return -1; }          // verify
-    kex_send      (ctx, msg3           , ctx->local_pk  );  // -> IS
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    se
-    kex_auth      (ctx, msg3 + 32);                         // auth
-    copy32(session_key, ctx->keys + 96);
-    WIPE_CTX(ctx);
-    return 0;
-}
-
 int crypto_kex_xk1_4(crypto_kex_server_ctx *server_ctx,
                      uint8_t                session_key[32],
                      uint8_t                client_pk  [32],
                      const uint8_t          msg3       [48])
-{
-    crypto_kex_ctx *ctx = &(server_ctx->ctx);
-    kex_receive   (ctx, ctx->remote_pk , msg3           );  // -> IS
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    se
-    if (kex_verify(ctx, msg3 + 32)) { return -1; }          // verify
-    copy32(client_pk  , ctx->remote_pk);
-    copy32(session_key, ctx->keys + 96);
-    WIPE_CTX(ctx);
-    return 0;
-}
-
-int crypto_kex_xk1_p4(crypto_kex_server_ctx *server_ctx,
-                      uint8_t                session_key[32],
-                      uint8_t                client_pk  [32],
-                      const uint8_t          msg3       [48])
 {
     crypto_kex_ctx *ctx = &(server_ctx->ctx);
     kex_receive   (ctx, ctx->remote_pk , msg3           );  // -> IS
@@ -282,20 +228,6 @@ void crypto_kex_x_1(crypto_kex_client_ctx *client_ctx,
     WIPE_CTX(ctx);
 }
 
-void crypto_kex_x_p1(crypto_kex_client_ctx *client_ctx,
-                     uint8_t                session_key[32],
-                     uint8_t                msg1       [80])
-{
-    crypto_kex_ctx *ctx = &(client_ctx->ctx);
-    kex_send      (ctx, msg1           , ctx->local_pke );  // -> IE
-    kex_update_key(ctx, ctx->local_ske , ctx->remote_pk );  //    es
-    kex_send      (ctx, msg1 + 32      , ctx->local_pk  );  // -> IS
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pk );  //    ss
-    kex_auth      (ctx, msg1 + 64);                         // auth
-    copy32(session_key, ctx->keys + 96);
-    WIPE_CTX(ctx);
-}
-
 int crypto_kex_x_2(crypto_kex_server_ctx *server_ctx,
                    uint8_t                session_key[32],
                    uint8_t                client_pk  [32],
@@ -312,21 +244,3 @@ int crypto_kex_x_2(crypto_kex_server_ctx *server_ctx,
     WIPE_CTX(ctx);
     return 0;
 }
-
-int crypto_kex_x_p2(crypto_kex_server_ctx *server_ctx,
-                    uint8_t                session_key[32],
-                    uint8_t                client_pk  [32],
-                    const uint8_t          msg1       [80])
-{
-    crypto_kex_ctx *ctx = &(server_ctx->ctx);
-    kex_receive   (ctx, ctx->remote_pke, msg1           );  // -> IE
-    kex_update_key(ctx, ctx->local_ske , ctx->remote_pk );  //    es
-    kex_receive   (ctx, ctx->remote_pk , msg1 + 32      );  // -> IS
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pk );  //    ss
-    if (kex_verify(ctx, msg1 + 64)) { return -1; }          // verify
-    copy32(client_pk  , ctx->remote_pk);
-    copy32(session_key, ctx->keys + 96);
-    WIPE_CTX(ctx);
-    return 0;
-}
-
