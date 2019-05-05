@@ -4,9 +4,6 @@
 #define WIPE_CTX(ctx)        crypto_wipe(ctx   , sizeof(*(ctx)))
 #define WIPE_BUFFER(buffer)  crypto_wipe(buffer, sizeof(buffer))
 
-static const uint8_t zero[32] = {0};
-static const uint8_t one [16] = {1};
-
 static void copy16(uint8_t out[16], const uint8_t in[16])
 {
     for (size_t i = 0; i < 16; i++) { out[i]  = in[i]; }
@@ -20,76 +17,72 @@ static void xor32 (uint8_t out[32], const uint8_t in[32])
     for (size_t i = 0; i < 32; i++) { out[i] ^= in[i]; }
 }
 
+static void kex_mix_hash(crypto_kex_ctx *ctx,
+                         const uint8_t *buf, size_t buf_size)
+{
+    crypto_blake2b_ctx blake_ctx;
+    crypto_blake2b_init  (&blake_ctx);
+    crypto_blake2b_update(&blake_ctx, ctx->hash, 32);
+    crypto_blake2b_update(&blake_ctx, buf, buf_size);
+    crypto_blake2b_final (&blake_ctx, ctx->hash);
+}
+
 static void kex_update_key(crypto_kex_ctx *ctx,
                            const uint8_t   secret_key[32],
                            const uint8_t   public_key[32])
 {
-    // Extract
     uint8_t tmp[32];
     crypto_x25519(tmp, secret_key, public_key);
-    crypto_chacha20_H(tmp, tmp, zero);
-    xor32(tmp, ctx->keys);
-    crypto_chacha20_H(tmp, tmp, ctx->pid);
-
-    // Expand
-    crypto_chacha_ctx chacha_ctx;
-    crypto_chacha20_init  (&chacha_ctx, tmp, one);
-    crypto_chacha20_stream(&chacha_ctx, ctx->keys, 128);
-
-    // Clean up
+    kex_mix_hash(ctx, tmp, 32);
+    ctx->has_key = 1;
     WIPE_BUFFER(tmp);
-    WIPE_CTX(&chacha_ctx);
 }
 
 static void kex_auth(crypto_kex_ctx *ctx, uint8_t mac[16])
 {
-    crypto_poly1305(mac, ctx->transcript, ctx->transcript_size,
-                    ctx->keys + 32);
+    copy16(mac, ctx->hash + 32);
+    kex_mix_hash(ctx, 0, 0);
 }
 
 static int kex_verify(crypto_kex_ctx *ctx, const uint8_t mac[16])
 {
-    uint8_t real_mac[16];
-    kex_auth(ctx, real_mac);
-    int mismatch = crypto_verify16(real_mac, mac);
+    int mismatch = crypto_verify16(ctx->hash + 32, mac);
     if (mismatch) {  WIPE_CTX(ctx); }
-    WIPE_BUFFER(real_mac);
+    kex_mix_hash(ctx, 0, 0);
     return mismatch;
 }
 
 static void kex_send(crypto_kex_ctx *ctx,
                      uint8_t msg[32], const uint8_t src[32])
 {
-    // Send message, encrypted if we have a key
     copy32(msg, src);
-    xor32(msg, ctx->keys + 64);
-    // Record sent message
-    copy32(ctx->transcript + ctx->transcript_size, msg);
-    ctx->transcript_size += 32;
+    if (ctx->has_key) { xor32(msg, ctx->hash + 32); }
+    kex_mix_hash(ctx, msg, 32);
 }
 
 static void kex_receive(crypto_kex_ctx *ctx,
                         uint8_t dest[32], const uint8_t msg[32])
 {
-    // Record incoming message
-    copy32(ctx->transcript + ctx->transcript_size, msg);
-    ctx->transcript_size += 32;
-    // Receive message, decrypted it if we have a key
     copy32(dest, msg);
-    xor32(dest, ctx->keys + 64);
+    if (ctx->has_key) { xor32(dest, ctx->hash + 32); }
+    kex_mix_hash(ctx, msg, 32);
 }
 
-void kex_init(crypto_kex_ctx *ctx, const uint8_t pid[16])
+static void kex_session_key(crypto_kex_ctx *ctx, uint8_t session_key[32])
 {
-    copy32(ctx->keys     , zero); // first chaining key
-    copy32(ctx->keys + 64, zero); // first encryption key
-    copy16(ctx->pid      , pid);  // protocol id
-    ctx->transcript_size = 0;     // transcript starts empty
+    copy32(session_key, ctx->hash);
+    WIPE_CTX(ctx);
+}
+
+static void kex_init(crypto_kex_ctx *ctx, const uint8_t pid[32])
+{
+    copy32(ctx->hash, pid);
+    ctx->has_key = 0;
 }
 
 static void kex_seed(crypto_kex_ctx *ctx, uint8_t random_seed[32])
 {
-    copy32(ctx->local_ske        , random_seed);
+    copy32(ctx->local_ske, random_seed);
     crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
     crypto_x25519_public_key(ctx->local_pke, ctx->local_ske);
 }
@@ -100,13 +93,13 @@ static void kex_locals(crypto_kex_ctx *ctx,
 {
     if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
     else               copy32                  (ctx->local_pk, local_pk);
-    copy32(ctx->local_sk         , local_sk   );
+    copy32(ctx->local_sk, local_sk);
 }
 
 ///////////
 /// XK1 ///
 ///////////
-static const uint8_t pid_xk1[16] = "Monokex XK1";
+static const uint8_t pid_xk1[32] = "Monokex XK1";
 
 void crypto_kex_xk1_init_client(crypto_kex_client_ctx *client_ctx,
                                 uint8_t                random_seed[32],
@@ -138,7 +131,7 @@ void crypto_kex_xk1_1(crypto_kex_client_ctx *client_ctx,
 {
     crypto_kex_ctx *ctx = &(client_ctx->ctx);
     kex_send      (ctx, msg1           , ctx->local_pke );  // -> IE
-    for (size_t i = 32; i < 48; i++) { msg1[i] = 0; }
+//    for (size_t i = 32; i < 48; i++) { msg1[i] = 0; }
 }
 
 void crypto_kex_xk1_2(crypto_kex_server_ctx *server_ctx,
@@ -161,13 +154,12 @@ int crypto_kex_xk1_3(crypto_kex_client_ctx *client_ctx,
     crypto_kex_ctx *ctx = &(client_ctx->ctx);
     kex_receive   (ctx, ctx->remote_pke, msg2           );  // <- RE
     kex_update_key(ctx, ctx->local_ske , ctx->remote_pke);  //    ee
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    es
+    kex_update_key(ctx, ctx->local_ske , ctx->remote_pk );  //    es
     if (kex_verify(ctx, msg2 + 32)) { return -1; }          // verify
     kex_send      (ctx, msg3           , ctx->local_pk  );  // -> IS
     kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    se
     kex_auth      (ctx, msg3 + 32);                         // auth
-    copy32(session_key, ctx->keys + 96);
-    WIPE_CTX(ctx);
+    kex_session_key(ctx, session_key);
     return 0;
 }
 
@@ -178,18 +170,17 @@ int crypto_kex_xk1_4(crypto_kex_server_ctx *server_ctx,
 {
     crypto_kex_ctx *ctx = &(server_ctx->ctx);
     kex_receive   (ctx, ctx->remote_pk , msg3           );  // -> IS
-    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    se
+    kex_update_key(ctx, ctx->local_ske , ctx->remote_pk );  //    se
     if (kex_verify(ctx, msg3 + 32)) { return -1; }          // verify
     copy32(client_pk  , ctx->remote_pk);
-    copy32(session_key, ctx->keys + 96);
-    WIPE_CTX(ctx);
+    kex_session_key(ctx, session_key);
     return 0;
 }
 
 /////////
 /// X ///
 /////////
-static const uint8_t pid_x[16] = "Monokex X";
+static const uint8_t pid_x[32] = "Monokex X";
 
 void crypto_kex_x_init_client(crypto_kex_client_ctx *client_ctx,
                               uint8_t                random_seed[32],
@@ -224,8 +215,7 @@ void crypto_kex_x_1(crypto_kex_client_ctx *client_ctx,
     kex_send      (ctx, msg1 + 32      , ctx->local_pk  );  // -> IS
     kex_update_key(ctx, ctx->local_sk  , ctx->remote_pk );  //    ss
     kex_auth      (ctx, msg1 + 64);                         // auth
-    copy32(session_key, ctx->keys + 96);
-    WIPE_CTX(ctx);
+    kex_session_key(ctx, session_key);
 }
 
 int crypto_kex_x_2(crypto_kex_server_ctx *server_ctx,
@@ -235,12 +225,11 @@ int crypto_kex_x_2(crypto_kex_server_ctx *server_ctx,
 {
     crypto_kex_ctx *ctx = &(server_ctx->ctx);
     kex_receive   (ctx, ctx->remote_pke, msg1           );  // -> IE
-    kex_update_key(ctx, ctx->local_ske , ctx->remote_pk );  //    es
+    kex_update_key(ctx, ctx->local_sk  , ctx->remote_pke);  //    es
     kex_receive   (ctx, ctx->remote_pk , msg1 + 32      );  // -> IS
     kex_update_key(ctx, ctx->local_sk  , ctx->remote_pk );  //    ss
     if (kex_verify(ctx, msg1 + 64)) { return -1; }          // verify
     copy32(client_pk  , ctx->remote_pk);
-    copy32(session_key, ctx->keys + 96);
-    WIPE_CTX(ctx);
+    kex_session_key(ctx, session_key);
     return 0;
 }

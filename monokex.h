@@ -2,16 +2,14 @@
 #include <stddef.h>
 
 typedef struct {
-    uint8_t transcript[128];
-    uint8_t keys      [128];
+    uint8_t hash       [64];
     uint8_t local_sk   [32];
     uint8_t local_pk   [32];
     uint8_t local_ske  [32];
     uint8_t local_pke  [32];
     uint8_t remote_pk  [32];
     uint8_t remote_pke [32];
-    uint8_t pid        [16];
-    size_t  transcript_size;
+    int     has_key;
 } crypto_kex_ctx;
 
 typedef struct { crypto_kex_ctx ctx; } crypto_kex_client_ctx;
