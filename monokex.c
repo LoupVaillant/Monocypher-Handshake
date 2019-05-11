@@ -14,9 +14,12 @@
 #define ES  4
 #define SE  5
 #define SS  6
-#define HAS_KEY     1
-#define HAS_REMOTE  2
-#define SHOULD_SEND 4
+#define HAS_KEY      1
+#define HAS_REMOTE   2
+#define GETS_REMOTE  4
+#define GAVE_REMOTE  8
+#define SHOULD_SEND 16
+#define IS_DONE     32
 
 typedef uint8_t u8;
 
@@ -31,6 +34,13 @@ static void encrypt(u8 *out, const u8 *in, size_t size, const u8 key[32])
     crypto_chacha20_init   (&ctx, key + 32, zero);
     crypto_chacha20_encrypt(&ctx, out, in, size);
     WIPE_CTX(&ctx);
+}
+
+static int kex_must_give_remote(crypto_kex_ctx *ctx)
+{
+    return (ctx->flags & GETS_REMOTE)
+        && (ctx->flags & HAS_REMOTE)
+        && !(ctx->flags & GAVE_REMOTE);
 }
 
 /////////////////////
@@ -122,8 +132,9 @@ void crypto_kex_send_p(crypto_kex_ctx *ctx,
                        u8       *m, size_t m_size,
                        const u8 *p, size_t p_size)
 {
-    // Do nothing if we should not send
-    if (!crypto_kex_should_send(ctx)) {
+    // Fail if we should not send (the failure is alas delayed)
+    if (!crypto_kex_should_send(ctx) || kex_must_give_remote(ctx)) {
+        WIPE_CTX(ctx);
         return;
     }
 
@@ -144,6 +155,7 @@ void crypto_kex_send_p(crypto_kex_ctx *ctx,
     }
     // Prepare for next message (if any)
     FOR (i, 0, 3) { ctx->messages[i] = ctx->messages[i+1]; }
+    if (ctx->messages[0] == 0) { ctx->flags |= IS_DONE; }
 
     // Send payload
     if (p != 0) {
@@ -169,7 +181,8 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
                          const u8 *m, size_t m_size)
 {
     // Do nothing & fail if we should not receive
-    if (!crypto_kex_should_receive(ctx)) {
+    if (!crypto_kex_should_receive(ctx) || kex_must_give_remote(ctx)) {
+        WIPE_CTX(ctx);
         return -1;
     }
     // flip sending flag
@@ -190,6 +203,7 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
     }
     // Prepare for next message (if any)
     FOR (i, 0, 3) { ctx->messages[i] = ctx->messages[i+1]; }
+    if (ctx->messages[0] == 0) { ctx->flags |= IS_DONE; }
 
     // Take payload into account
     if (p != 0) {
@@ -212,14 +226,20 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
     }
     // Check for size overflow (only possible if we misuse the API)
     int underflow = m_size >> ((sizeof(m_size) * 8) - 1);
-    if (underflow) {
-    }
     return underflow ? -1 : 0;
 }
 
+//////////////
+/// Status ///
+//////////////
 int crypto_kex_has_remote_key(crypto_kex_ctx *ctx)
 {
     return ctx->flags & HAS_REMOTE;
+}
+
+int crypto_kex_is_done(crypto_kex_ctx *ctx)
+{
+    return ctx->flags & IS_DONE;
 }
 
 int crypto_kex_should_send(crypto_kex_ctx *ctx)
@@ -232,9 +252,17 @@ int crypto_kex_should_receive(crypto_kex_ctx *ctx)
     return !crypto_kex_is_done(ctx) && !(ctx->flags & SHOULD_SEND);
 }
 
-int crypto_kex_is_done(crypto_kex_ctx *ctx)
+size_t crypto_kex_next_message_min_size(crypto_kex_ctx *ctx)
 {
-    return ctx->messages[0] == 0;
+    unsigned has_key = ctx->flags & HAS_KEY;
+    uint16_t message = ctx->messages[0];
+    size_t   size    = 0;
+    while (message != 0) {
+        size    += (message & 7) <= 2 ? 32 : 0;
+        has_key |= (message & 7) >= 3 ?  1 : 0;
+        message >>= 3;
+    }
+    return size + has_key ? 16 : 0;
 }
 
 ////////////////
@@ -242,14 +270,19 @@ int crypto_kex_is_done(crypto_kex_ctx *ctx)
 ////////////////
 void crypto_kex_get_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
 {
-    copy32(key, ctx->remote_pk);
+    if (HAS_REMOTE) { copy32(key, ctx->remote_pk); }
+    ctx->flags |= GAVE_REMOTE;
 }
 
-void crypto_kex_get_session_keys(crypto_kex_ctx *ctx,
-                                 u8 key1[32], u8 key2[32])
+void crypto_kex_get_session_key(crypto_kex_ctx *ctx,
+                                u8 key[32], u8 extra[32])
 {
-    if (key1 != 0) { copy32(key1, ctx->hash);      }
-    if (key2 != 0) { copy32(key2, ctx->hash + 32); }
+    if (crypto_kex_is_done(ctx) && !kex_must_give_remote(ctx)) {
+        copy32(key, ctx->hash);
+        if (extra != 0) {
+            copy32(extra, ctx->hash + 32);
+        }
+    }
     WIPE_CTX(ctx);
 }
 
@@ -284,6 +317,7 @@ void crypto_kex_xk1_init_server(crypto_kex_ctx *ctx,
     kex_seed   (ctx, random_seed);
     kex_locals (ctx, server_sk, server_pk);
     kex_receive(ctx, ctx->local_pk, ctx->local_pk);
+    ctx->flags |= GETS_REMOTE;
     ctx->messages[0] = E;
     ctx->messages[1] = E + (EE << 3) + (SE << 6);;
     ctx->messages[2] = S + (ES << 3);
@@ -319,6 +353,7 @@ void crypto_kex_x_init_server(crypto_kex_ctx *ctx,
     kex_init   (ctx, pid_x);
     kex_locals (ctx, server_sk, server_pk);
     kex_receive(ctx, ctx->local_pk, ctx->local_pk);
+    ctx->flags |= GETS_REMOTE;
     ctx->messages[0] = E + (SE << 3) + (S << 6) + (SS << 9);
     ctx->messages[1] = 0;
     ctx->messages[2] = 0;

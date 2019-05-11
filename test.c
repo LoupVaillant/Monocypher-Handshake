@@ -52,9 +52,9 @@ int main()
             fprintf(stderr, "Client is not finished, cannot get session key\n");
             return 1;
         }
-        crypto_kex_get_session_keys(&client_ctx,
-                                    client_session_key1,
-                                    client_session_key2);
+        crypto_kex_get_session_key(&client_ctx,
+                                   client_session_key1,
+                                   client_session_key2);
 
         u8 server_session_key1[32];
         u8 server_session_key2[32];
@@ -62,9 +62,9 @@ int main()
             fprintf(stderr, "Server is not finished, cannot get session key\n");
             return 1;
         }
-        crypto_kex_get_session_keys(&server_ctx,
-                                    server_session_key1,
-                                    server_session_key2);
+        crypto_kex_get_session_key(&server_ctx,
+                                   server_session_key1,
+                                   server_session_key2);
 
         if (crypto_verify32(client_session_key1, server_session_key1) ||
             crypto_verify32(client_session_key2, server_session_key2)) {
@@ -112,9 +112,9 @@ int main()
             fprintf(stderr, "Client is not finished, cannot get session key\n");
             return 1;
         }
-        crypto_kex_get_session_keys(&client_ctx,
-                                    client_session_key1,
-                                    client_session_key2);
+        crypto_kex_get_session_key(&client_ctx,
+                                   client_session_key1,
+                                   client_session_key2);
 
         u8 server_session_key1[32];
         u8 server_session_key2[32];
@@ -122,9 +122,9 @@ int main()
             fprintf(stderr, "Server is not finished, cannot get session key\n");
             return 1;
         }
-        crypto_kex_get_session_keys(&server_ctx,
-                                    server_session_key1,
-                                    server_session_key2);
+        crypto_kex_get_session_key(&server_ctx,
+                                   server_session_key1,
+                                   server_session_key2);
 
         if (crypto_verify32(client_session_key1, server_session_key1) ||
             crypto_verify32(client_session_key2, server_session_key2)) {

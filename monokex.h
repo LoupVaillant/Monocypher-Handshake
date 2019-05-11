@@ -10,7 +10,7 @@ typedef struct {
     uint8_t  remote_pk [32];
     uint8_t  remote_pke[32];
     uint16_t messages  [ 4];
-    unsigned flags;
+    unsigned short flags;
 } crypto_kex_ctx;
 
 // Basic send & receive functions
@@ -31,15 +31,17 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
 
 // status
 int crypto_kex_has_remote_key(crypto_kex_ctx *ctx);
+int crypto_kex_is_done       (crypto_kex_ctx *ctx);
 int crypto_kex_should_send   (crypto_kex_ctx *ctx);
 int crypto_kex_should_receive(crypto_kex_ctx *ctx);
-int crypto_kex_is_done       (crypto_kex_ctx *ctx);
+
+size_t crypto_kex_next_message_min_size(crypto_kex_ctx *ctx);
 
 // outputs
 void crypto_kex_get_remote_key(crypto_kex_ctx *ctx, uint8_t key[32]);
 
-void crypto_kex_get_session_keys(crypto_kex_ctx *ctx,
-                                 uint8_t key1[32], uint8_t key2[32]);
+void crypto_kex_get_session_key(crypto_kex_ctx *ctx,
+                                uint8_t key[32], uint8_t extra[32]);
 
 
 ///////////
