@@ -277,14 +277,14 @@ int crypto_kex_should_send(crypto_kex_ctx *ctx)
 {
     return (ctx->flags & IS_OK)
         && (ctx->flags & SHOULD_SEND)
-        && !crypto_kex_is_done(ctx);
+        && ctx->messages[0] != 0;
 }
 
 int crypto_kex_should_receive(crypto_kex_ctx *ctx)
 {
     return  (ctx->flags & IS_OK)
         && !(ctx->flags & SHOULD_SEND)
-        && !crypto_kex_is_done(ctx);
+        && ctx->messages[0] != 0;
 }
 
 size_t crypto_kex_next_message_min_size(crypto_kex_ctx *ctx)
@@ -380,7 +380,7 @@ void crypto_kex_x_init_client(crypto_kex_ctx *ctx,
     kex_locals  (ctx, client_sk, client_pk);
     kex_mix_hash(ctx, server_pk, 32);
     copy(ctx->remote_pk, server_pk, 32);
-    ctx->flags |= SHOULD_SEND;
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
     ctx->messages[0] = E + (ES << 3) + (S << 6) + (SS << 9);
     ctx->messages[1] = 0;
     ctx->messages[2] = 0;
