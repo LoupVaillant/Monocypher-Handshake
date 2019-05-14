@@ -25,16 +25,17 @@
 
 typedef uint8_t u8;
 typedef unsigned short ushort;
+typedef struct { u8       *buf; size_t size; } buffer;
+typedef struct { const u8 *buf; size_t size; } const_buffer;
 
 static void copy16(u8 out[16], const u8 in[16]){ FOR(i, 0, 16) out[i] = in[i]; }
 static void copy32(u8 out[32], const u8 in[32]){ FOR(i, 0, 32) out[i] = in[i]; }
-static void xor32 (u8 out[32], const u8 in[32]){ FOR(i, 0, 32) out[i]^= in[i]; }
 
 static void encrypt(u8 *out, const u8 *in, size_t size, const u8 key[32])
 {
     static const u8 zero[8] = {0};
     crypto_chacha_ctx ctx;
-    crypto_chacha20_init   (&ctx, key + 32, zero);
+    crypto_chacha20_init   (&ctx, key, zero);
     crypto_chacha20_encrypt(&ctx, out, in, size);
     WIPE_CTX(&ctx);
 }
@@ -47,6 +48,7 @@ static int  kex_has_key    (ck_ctx *ctx) { return ctx->flags & HAS_KEY;     }
 static int  kex_has_remote (ck_ctx *ctx) { return ctx->flags & HAS_REMOTE;  }
 static int  kex_gets_remote(ck_ctx *ctx) { return ctx->flags & GETS_REMOTE; }
 static int  kex_should_send(ck_ctx *ctx) { return ctx->flags & SHOULD_SEND; }
+
 
 /////////////////////
 /// State machine ///
@@ -72,18 +74,43 @@ static void kex_update_key(crypto_kex_ctx *ctx,
     WIPE_BUFFER(tmp);
 }
 
-static void kex_send(crypto_kex_ctx *ctx, u8 msg[32], const u8 src[32])
+static void kex_auth(crypto_kex_ctx *ctx, u8 tag[16])
 {
-    copy32(msg, src);
-    if (kex_has_key(ctx)) { xor32(msg, ctx->hash + 32); }
-    kex_mix_hash(ctx, msg, 32);
+    copy16(tag, ctx->hash + 32);
+    kex_mix_hash(ctx, 0, 0);
 }
 
-static void kex_receive(crypto_kex_ctx *ctx, u8 dest[32], const u8 msg[32])
+static int kex_verify(crypto_kex_ctx *ctx, const u8 tag[16])
 {
-    copy32(dest, msg);
-    if (kex_has_key(ctx)) { xor32(dest, ctx->hash + 32); }
-    kex_mix_hash(ctx, msg, 32);
+    if (crypto_verify16(tag, ctx->hash + 32)) {
+        WIPE_CTX(ctx);
+        return -1;
+    }
+    kex_mix_hash(ctx, 0, 0);
+    return 0;
+}
+
+static void kex_encrypt(crypto_kex_ctx *ctx,
+                        u8 *msg, const u8 *src, size_t size)
+{
+    encrypt(msg, src, size, ctx->hash + 32);
+    kex_mix_hash(ctx, msg, size);
+    kex_auth(ctx, msg + size);
+}
+
+static int kex_decrypt(crypto_kex_ctx *ctx,
+                       u8 *dest, const u8 *msg, size_t size)
+{
+    u8 key[32];
+    copy32(key, ctx->hash + 32);
+    kex_mix_hash(ctx, msg, size);
+    if (kex_verify(ctx, msg + size)) {
+        WIPE_BUFFER(key);
+        return -1;
+    }
+    encrypt(dest, msg, size, key);
+    WIPE_BUFFER(key);
+    return 0;
 }
 
 static unsigned kex_next_token(crypto_kex_ctx *ctx)
@@ -105,6 +132,7 @@ static void kex_next_message(crypto_kex_ctx *ctx)
 //////////////////////
 static void kex_init(crypto_kex_ctx *ctx, const u8 pid[32])
 {
+    WIPE_CTX(ctx);
     copy32(ctx->hash, pid);
     ctx->flags = IS_OK; // wiping the context sets it to false
 }
@@ -117,8 +145,8 @@ static void kex_seed(crypto_kex_ctx *ctx, u8 random_seed[32])
 }
 
 static void kex_locals(crypto_kex_ctx *ctx,
-                       const u8   local_sk[32],
-                       const u8   local_pk[32])
+                       const u8        local_sk[32],
+                       const u8        local_pk[32])
 {
     if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
     else               copy32                  (ctx->local_pk, local_pk);
@@ -155,8 +183,24 @@ void crypto_kex_send_p(crypto_kex_ctx *ctx,
     // Send core message
     while (ctx->messages[0] != 0) { // message not yet empty
         switch (kex_next_token(ctx)) {
-        case E : kex_send(ctx, m, ctx->local_pke); m += 32; m_size -= 32; break;
-        case S : kex_send(ctx, m, ctx->local_pk ); m += 32; m_size -= 32; break;
+        case E :
+            copy32(m, ctx->local_pke);
+            kex_mix_hash(ctx, m, 32);
+            m      += 32;
+            m_size -= 32;
+            break;
+        case S :
+            if (kex_has_key(ctx)) {
+                kex_encrypt(ctx, m, ctx->local_pk, 32);
+                m      += 48;
+                m_size -= 48;
+            } else {
+                copy32(m, ctx->local_pk);
+                kex_mix_hash(ctx, m, 32);
+                m      += 32;
+                m_size -= 32;
+            }
+            break;
         case EE: kex_update_key(ctx, ctx->local_ske, ctx->remote_pke);    break;
         case ES: kex_update_key(ctx, ctx->local_ske, ctx->remote_pk );    break;
         case SE: kex_update_key(ctx, ctx->local_sk , ctx->remote_pke);    break;
@@ -166,21 +210,18 @@ void crypto_kex_send_p(crypto_kex_ctx *ctx,
     }
     kex_next_message(ctx);
 
-    // Send payload
-    if (p != 0) {
-        if (kex_has_key(ctx)) { encrypt(m, p, p_size, ctx->hash + 32); }
-        else                  { FOR(i, 0, p_size) { m[i] = p[i]; }     }
-        kex_mix_hash(ctx, m, p_size);
-        m      += p_size;
-        m_size -= p_size;
-    }
-    // Authenticate
+    // Authentictate (possibly with payload)
     if (kex_has_key(ctx)) {
-        copy16(m, ctx->hash + 32);
-        kex_mix_hash(ctx, 0, 0);
+        if (p != 0) { kex_encrypt(ctx, m, p, p_size); }
+        else        { kex_auth(ctx, m);               }
         m      += 16;
         m_size -= 16;
+    } else {
+        if (p != 0) { FOR(i, 0, p_size) { m[i] = p[i]; } }
     }
+    m      += p_size;
+    m_size -= p_size;
+
     // Pad
     FOR (i, 0, m_size) { m[i] = 0; } // should blow up if m_size underflows
 }
@@ -200,9 +241,28 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
     // receive core message
     while (ctx->messages[0] != 0) { // message not yet empty
         switch (kex_next_token(ctx)) {
-        case E : kex_receive(ctx, ctx->remote_pke, m); m+=32; m_size-=32; break;
-        case S : kex_receive(ctx, ctx->remote_pk , m); m+=32; m_size-=32;
-                 kex_set(ctx, HAS_REMOTE);                                break;
+        case E :
+            copy32(ctx->remote_pke, m);
+            kex_mix_hash(ctx, m, 32);
+            m      += 32;
+            m_size -= 32;
+            break;
+        case S :
+            if (kex_has_key(ctx)) {
+                if (kex_decrypt(ctx, ctx->remote_pk, m, 32)) {
+                    return -1;
+                }
+                m      += 48;
+                m_size -= 48;
+            }
+            else {
+                copy32(ctx->local_pk, m);
+                kex_mix_hash(ctx, m, 32);
+                m      += 32;
+                m_size -= 32;
+            }
+            kex_set(ctx, HAS_REMOTE);
+            break;
         case EE: kex_update_key(ctx, ctx->local_ske, ctx->remote_pke);    break;
         case ES: kex_update_key(ctx, ctx->local_ske, ctx->remote_pk );    break;
         case SE: kex_update_key(ctx, ctx->local_sk , ctx->remote_pke);    break;
@@ -212,25 +272,20 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
     }
     kex_next_message(ctx);
 
-    // Take payload into account
-    if (p != 0) {
-        kex_mix_hash(ctx, m, p_size);
-    }
-    // Verify (may fail)
+    // Verify (possibly with payload)
     if (kex_has_key(ctx)) {
-        if (crypto_verify16(ctx->hash + 32, m + p_size)) {
-            WIPE_CTX(ctx);
-            return -1;
-        }
-        kex_mix_hash(ctx, 0, 0);
+        int error = p != 0
+                  ? kex_decrypt(ctx, p, m, p_size)
+                  : kex_verify(ctx, m);
+        if (error) { return -1; }
+        m      += 16;
+        m_size -= 16;
+    } else {
+        if (p != 0) { FOR(i, 0, p_size) { p[i] = m[i]; } }
     }
-    // Receive payload
-    if (p != 0) {
-        if (kex_has_key(ctx)) { encrypt(p, m, p_size, ctx->hash + 32); }
-        else                  { FOR(i, 0, p_size) { p[i] = m[i]; }     }
-        m      += p_size;
-        m_size -= p_size;
-    }
+    m      += p_size;
+    m_size -= p_size;
+
     // Check for size overflow (only possible if we misuse the API)
     if (m_size >> ((sizeof(m_size) * 8) - 1)) {
         WIPE_CTX(ctx);
@@ -317,10 +372,11 @@ void crypto_kex_xk1_init_client(crypto_kex_ctx *ctx,
                                 const u8        client_pk  [32],
                                 const u8        server_pk  [32])
 {
-    kex_init   (ctx, pid_xk1);
-    kex_seed   (ctx, random_seed);
-    kex_locals (ctx, client_sk, client_pk);
-    kex_receive(ctx, ctx->remote_pk, server_pk);
+    kex_init    (ctx, pid_xk1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    kex_mix_hash(ctx, server_pk, 32);
+    copy32(ctx->remote_pk, server_pk);
     ctx->flags |= HAS_REMOTE | SHOULD_SEND;
     ctx->messages[0] = E;
     ctx->messages[1] = E + (EE << 3) + (ES << 6);
@@ -333,10 +389,10 @@ void crypto_kex_xk1_init_server(crypto_kex_ctx *ctx,
                                 const u8        server_sk  [32],
                                 const u8        server_pk  [32])
 {
-    kex_init   (ctx, pid_xk1);
-    kex_seed   (ctx, random_seed);
-    kex_locals (ctx, server_sk, server_pk);
-    kex_receive(ctx, ctx->local_pk, ctx->local_pk);
+    kex_init    (ctx, pid_xk1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    kex_mix_hash(ctx, ctx->local_pk, 32);
     ctx->flags |= GETS_REMOTE;
     ctx->messages[0] = E;
     ctx->messages[1] = E + (EE << 3) + (SE << 6);;
@@ -355,10 +411,11 @@ void crypto_kex_x_init_client(crypto_kex_ctx *ctx,
                               const u8        client_pk  [32],
                               const u8        server_pk  [32])
 {
-    kex_init   (ctx, pid_x);
-    kex_seed   (ctx, random_seed);
-    kex_locals (ctx, client_sk, client_pk);
-    kex_receive(ctx, ctx->remote_pk, server_pk);
+    kex_init    (ctx, pid_x);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    kex_mix_hash(ctx, server_pk, 32);
+    copy32(ctx->remote_pk, server_pk);
     ctx->flags |= SHOULD_SEND;
     ctx->messages[0] = E + (ES << 3) + (S << 6) + (SS << 9);
     ctx->messages[1] = 0;
@@ -370,9 +427,9 @@ void crypto_kex_x_init_server(crypto_kex_ctx *ctx,
                               const u8        server_sk [32],
                               const u8        server_pk [32])
 {
-    kex_init   (ctx, pid_x);
-    kex_locals (ctx, server_sk, server_pk);
-    kex_receive(ctx, ctx->local_pk, ctx->local_pk);
+    kex_init    (ctx, pid_x);
+    kex_locals  (ctx, server_sk, server_pk);
+    kex_mix_hash(ctx, ctx->local_pk, 32);
     ctx->flags |= GETS_REMOTE;
     ctx->messages[0] = E + (SE << 3) + (S << 6) + (SS << 9);
     ctx->messages[1] = 0;

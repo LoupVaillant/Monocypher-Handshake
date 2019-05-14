@@ -32,9 +32,9 @@ int main()
             fprintf(stderr, "msg2 corrupted\n");
             return 1;
         }
-        u8 msg3[48];
-        crypto_kex_send       (&client_ctx, msg3, 48);
-        if (crypto_kex_receive(&server_ctx, msg3, 48)) {
+        u8 msg3[64];
+        crypto_kex_send       (&client_ctx, msg3, 64);
+        if (crypto_kex_receive(&server_ctx, msg3, 64)) {
             fprintf(stderr, "msg3 corrupted\n");
             return 1;
         }
@@ -92,9 +92,9 @@ int main()
         crypto_kex_ctx server_ctx;
         crypto_kex_x_init_server(&server_ctx, server_sk, server_pk);
 
-        u8 msg[80];
-        crypto_kex_send       (&client_ctx, msg, 80);
-        if (crypto_kex_receive(&server_ctx, msg, 80)) {
+        u8 msg[96];
+        crypto_kex_send       (&client_ctx, msg, 96);
+        if (crypto_kex_receive(&server_ctx, msg, 96)) {
             fprintf(stderr, "msg corrupted\n");
             return 1;
         }
