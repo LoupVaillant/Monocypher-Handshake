@@ -194,7 +194,7 @@ void crypto_kex_send_p(crypto_kex_ctx *ctx,
     if (ctx->flags & HAS_KEY) {
         if (p != 0) { kex_encrypt(ctx, m, p, p_size); SKIP(p_size); }
         else        { kex_auth(ctx, m);                             }
-        SKIP(16);
+        SKIP(16); // final authentication tag
     } else {
         if (p != 0) {
             copy(m, p, p_size);
@@ -242,7 +242,7 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
         if (p != 0) { error = kex_decrypt(ctx, p, m, p_size); SKIP(p_size); }
         else        { error = kex_verify(ctx, m);                           }
         if (error) { return -1; }
-        SKIP(16);
+        SKIP(16); // final authentication tag
     } else {
         if (p != 0) {
             copy(p, m, p_size);
@@ -261,18 +261,6 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
 //////////////
 /// Status ///
 //////////////
-int crypto_kex_has_remote_key(crypto_kex_ctx *ctx)
-{
-    return ctx->flags & HAS_REMOTE;
-}
-
-int crypto_kex_is_done(crypto_kex_ctx *ctx)
-{
-    return (ctx->flags & IS_OK)
-        && ctx->messages[0] == 0
-        && (!(ctx->flags & GETS_REMOTE) || !(ctx->flags & HAS_REMOTE));
-}
-
 int crypto_kex_should_send(crypto_kex_ctx *ctx)
 {
     return (ctx->flags & IS_OK)
@@ -285,6 +273,19 @@ int crypto_kex_should_receive(crypto_kex_ctx *ctx)
     return  (ctx->flags & IS_OK)
         && !(ctx->flags & SHOULD_SEND)
         && ctx->messages[0] != 0;
+}
+
+int crypto_kex_should_get_remote(crypto_kex_ctx *ctx)
+{
+    return (ctx->flags & HAS_REMOTE)
+        && (ctx->flags & GETS_REMOTE);
+}
+
+int crypto_kex_should_get_keys(crypto_kex_ctx *ctx)
+{
+    return (ctx->flags & IS_OK)
+        && ctx->messages[0] == 0
+        && !crypto_kex_should_get_remote(ctx);
 }
 
 size_t crypto_kex_next_message_min_size(crypto_kex_ctx *ctx)
@@ -316,7 +317,7 @@ void crypto_kex_get_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
 void crypto_kex_get_session_key(crypto_kex_ctx *ctx,
                                 u8 key[32], u8 extra[32])
 {
-    if (crypto_kex_is_done(ctx)) {
+    if (crypto_kex_should_get_keys(ctx)) {
         copy(key, ctx->hash, 32);
         if (extra != 0) {
             copy(extra, ctx->hash + 32, 32);
