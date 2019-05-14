@@ -52,7 +52,7 @@ static void print(const char *name, u64 duration, const char *unit)
 #include <monocypher.h>
 #include "monokex.h"
 
-static void get_interactive_session(u8 msg1[32], u8 msg2[48], u8 msg3[48],
+static void get_interactive_session(u8 msg1[32], u8 msg2[48], u8 msg3[64],
                                     u8 client_pk[32], u8 server_pk[32],
                                     const u8 client_sk  [32],
                                     const u8 server_sk  [32],
@@ -68,31 +68,57 @@ static void get_interactive_session(u8 msg1[32], u8 msg2[48], u8 msg3[48],
         c_seed[i] = client_seed[i];
         s_seed[i] = server_seed[i];
     }
-    crypto_kex_client_ctx client_ctx;
+    crypto_kex_ctx client_ctx;
     crypto_kex_xk1_init_client(&client_ctx, c_seed, client_sk, client_pk,
                                server_pk);
-    crypto_kex_server_ctx server_ctx;
+    crypto_kex_ctx server_ctx;
     crypto_kex_xk1_init_server(&server_ctx, s_seed, server_sk, server_pk);
 
-    crypto_kex_xk1_1(&client_ctx, msg1);
-    crypto_kex_xk1_2(&server_ctx, msg2, msg1);
-
-    u8 client_session_key[32];
-    if (crypto_kex_xk1_3(&client_ctx, client_session_key,
-                         msg3, msg2)) {
-        fprintf(stderr, "Cannot confirm\n");
+    crypto_kex_send       (&client_ctx, msg1, 32);
+    if (crypto_kex_receive(&server_ctx, msg1, 32)) {
+        fprintf(stderr, "msg1 corrupted\n");
+        return;
+    }
+    crypto_kex_send       (&server_ctx, msg2, 48);
+    if (crypto_kex_receive(&client_ctx, msg2, 48)) {
+        fprintf(stderr, "msg2 corrupted\n");
+        return;
+    }
+    crypto_kex_send       (&client_ctx, msg3, 64);
+    if (crypto_kex_receive(&server_ctx, msg3, 64)) {
+        fprintf(stderr, "msg3 corrupted\n");
         return;
     }
 
-    u8 server_session_key[32];
-    u8 remote_pk         [32]; // same as client_pk
-    if (crypto_kex_xk1_4(&server_ctx, server_session_key, remote_pk,
-                         msg3)) {
-        fprintf(stderr, "Cannot accept\n");
+    u8 remote_pk[32]; // same as client_pk
+    if (!crypto_kex_has_remote_key(&server_ctx)) {
+        fprintf(stderr, "Server does not have client public key\n");
         return;
     }
+    crypto_kex_get_remote_key(&server_ctx, remote_pk);
 
-    if (crypto_verify32(client_session_key, server_session_key)) {
+    u8 client_session_key1[32];
+    u8 client_session_key2[32];
+    if (!crypto_kex_is_done(&client_ctx)) {
+        fprintf(stderr, "Client is not finished, cannot get session key\n");
+        return;
+    }
+    crypto_kex_get_session_key(&client_ctx,
+                               client_session_key1,
+                               client_session_key2);
+
+    u8 server_session_key1[32];
+    u8 server_session_key2[32];
+    if (!crypto_kex_is_done(&server_ctx)) {
+        fprintf(stderr, "Server is not finished, cannot get session key\n");
+        return;
+    }
+    crypto_kex_get_session_key(&server_ctx,
+                               server_session_key1,
+                               server_session_key2);
+
+    if (crypto_verify32(client_session_key1, server_session_key1) ||
+        crypto_verify32(client_session_key2, server_session_key2)) {
         fprintf(stderr, "Different session keys\n");
         return;
     }
@@ -109,27 +135,26 @@ static u64 interactive_client(void)
     RANDOM_INPUT(server_sk, 32);
     RANDOM_INPUT(client_seed, 32);
     RANDOM_INPUT(server_seed, 32);
-    u8 msg1[32]; u8 msg2[48]; u8 msg3[48];
+    u8 msg1[32]; u8 msg2[48]; u8 msg3[64];
     u8 client_pk[32]; u8 server_pk[32];
     get_interactive_session(msg1, msg2, msg3,
                             client_pk  , server_pk,
                             client_sk  , server_sk,
                             client_seed, server_seed);
     TIMING_START {
-        u8 session_key[32];
-        crypto_kex_client_ctx client_ctx;
+        crypto_kex_ctx client_ctx;
         u8 seed[32];
         FOR (i, 0, 32) {
             seed[i] = client_seed[i];
         }
         crypto_kex_xk1_init_client(&client_ctx, seed, client_sk, client_pk,
                                    server_pk);
-        crypto_kex_xk1_1(&client_ctx, msg1);
-        if (crypto_kex_xk1_3(&client_ctx, session_key,
-                             msg3, msg2)) {
-            fprintf(stderr, "Cannot confirm\n");
+        crypto_kex_send(&client_ctx, msg1, 32);
+        if (crypto_kex_receive(&client_ctx, msg2, 48)) {
+            fprintf(stderr, "msg2 corrupted\n");
             return 1;
         }
+        crypto_kex_send(&client_ctx, msg3, 64);
     }
     TIMING_END;
 }
@@ -140,32 +165,34 @@ static u64 interactive_server(void)
     RANDOM_INPUT(server_sk, 32);
     RANDOM_INPUT(client_seed, 32);
     RANDOM_INPUT(server_seed, 32);
-    u8 msg1[32]; u8 msg2[48]; u8 msg3[48];
+    u8 msg1[32]; u8 msg2[48]; u8 msg3[64];
     u8 client_pk[32]; u8 server_pk[32];
     get_interactive_session(msg1, msg2, msg3,
                             client_pk  , server_pk,
                             client_sk  , server_sk,
                             client_seed, server_seed);
     TIMING_START {
-        u8 session_key[32];
-        u8 remote_pk         [32]; // same as client_pk
-        crypto_kex_server_ctx server_ctx;
+        crypto_kex_ctx server_ctx;
         u8 seed[32];
         FOR (i, 0, 32) {
             seed[i] = server_seed[i];
         }
         crypto_kex_xk1_init_server(&server_ctx, seed, server_sk, server_pk);
-        crypto_kex_xk1_2(&server_ctx, msg2, msg1);
-        if (crypto_kex_xk1_4(&server_ctx, session_key, remote_pk,
-                             msg3)) {
-            fprintf(stderr, "Cannot accept\n");
+
+        if (crypto_kex_receive(&server_ctx, msg1, 32)) {
+            fprintf(stderr, "msg1 corrupted\n");
+            return 1;
+        }
+        crypto_kex_send       (&server_ctx, msg2, 48);
+        if (crypto_kex_receive(&server_ctx, msg3, 64)) {
+            fprintf(stderr, "msg3 corrupted\n");
             return 1;
         }
     }
     TIMING_END;
 }
 
-static void get_one_way_session(u8 msg[80], u8 client_pk[32], u8 server_pk[32],
+static void get_one_way_session(u8 msg[96], u8 client_pk[32], u8 server_pk[32],
                                 const u8 client_sk  [32],
                                 const u8 server_sk  [32],
                                 const u8 client_seed[32])
@@ -178,23 +205,47 @@ static void get_one_way_session(u8 msg[80], u8 client_pk[32], u8 server_pk[32],
         c_seed[i] = client_seed[i];
     }
 
-    crypto_kex_client_ctx client_ctx;
+    crypto_kex_ctx client_ctx;
     crypto_kex_x_init_client(&client_ctx, c_seed, client_sk, client_pk,
                              server_pk);
-    crypto_kex_server_ctx server_ctx;
+    crypto_kex_ctx server_ctx;
     crypto_kex_x_init_server(&server_ctx, server_sk, server_pk);
 
-    u8 client_session_key[32];
-    crypto_kex_x_1(&client_ctx, client_session_key, msg);
-
-    u8 server_session_key[32];
-    u8 remote_pk         [32]; // same as client_pk
-    if (crypto_kex_x_2(&server_ctx, server_session_key, remote_pk, msg)) {
-        fprintf(stderr, "Cannot receive\n");
+    crypto_kex_send       (&client_ctx, msg, 96);
+    if (crypto_kex_receive(&server_ctx, msg, 96)) {
+        fprintf(stderr, "msg corrupted\n");
         return;
     }
 
-    if (crypto_verify32(client_session_key, server_session_key)) {
+    u8 remote_pk[32]; // same as client_pk
+    if (!crypto_kex_has_remote_key(&server_ctx)) {
+        fprintf(stderr, "Server does not have client public key\n");
+        return;
+    }
+    crypto_kex_get_remote_key(&server_ctx, remote_pk);
+
+    u8 client_session_key1[32];
+    u8 client_session_key2[32];
+    if (!crypto_kex_is_done(&client_ctx)) {
+        fprintf(stderr, "Client is not finished, cannot get session key\n");
+        return;
+    }
+    crypto_kex_get_session_key(&client_ctx,
+                               client_session_key1,
+                               client_session_key2);
+
+    u8 server_session_key1[32];
+    u8 server_session_key2[32];
+    if (!crypto_kex_is_done(&server_ctx)) {
+        fprintf(stderr, "Server is not finished, cannot get session key\n");
+        return;
+    }
+    crypto_kex_get_session_key(&server_ctx,
+                               server_session_key1,
+                               server_session_key2);
+
+    if (crypto_verify32(client_session_key1, server_session_key1) ||
+        crypto_verify32(client_session_key2, server_session_key2)) {
         fprintf(stderr, "Different session keys\n");
         return;
     }
@@ -209,21 +260,21 @@ static u64 one_way_client(void)
     RANDOM_INPUT(client_sk, 32);
     RANDOM_INPUT(server_sk, 32);
     RANDOM_INPUT(client_seed, 32);
-    u8 msg[80]; u8 client_pk[32]; u8 server_pk[32];
+    u8 msg[96]; u8 client_pk[32]; u8 server_pk[32];
     get_one_way_session(msg,
                         client_pk, server_pk,
                         client_sk, server_sk,
                         client_seed);
     TIMING_START {
-        u8 session_key[32];
         u8 seed[32];
         FOR (i, 0, 32) {
             seed[i] = client_seed[i];
         }
-        crypto_kex_client_ctx client_ctx;
+        crypto_kex_ctx client_ctx;
         crypto_kex_x_init_client(&client_ctx, seed, client_sk, client_pk,
                                  server_pk);
-        crypto_kex_x_1(&client_ctx, session_key, msg);
+
+        crypto_kex_send(&client_ctx, msg, 96);
     }
     TIMING_END;
 }
@@ -233,18 +284,16 @@ static u64 one_way_server(void)
     RANDOM_INPUT(client_sk, 32);
     RANDOM_INPUT(server_sk, 32);
     RANDOM_INPUT(client_seed, 32);
-    u8 msg[80]; u8 client_pk[32]; u8 server_pk[32];
+    u8 msg[96]; u8 client_pk[32]; u8 server_pk[32];
     get_one_way_session(msg,
                         client_pk, server_pk,
                         client_sk, server_sk,
                         client_seed);
     TIMING_START {
-        u8 session_key[32];
-        u8 remote_pk         [32]; // same as client_pk
-        crypto_kex_server_ctx server_ctx;
+        crypto_kex_ctx server_ctx;
         crypto_kex_x_init_server(&server_ctx, server_sk, server_pk);
-        if (crypto_kex_x_2(&server_ctx, session_key, remote_pk, msg)) {
-            fprintf(stderr, "Cannot receive\n");
+        if (crypto_kex_receive(&server_ctx, msg, 96)) {
+            fprintf(stderr, "msg corrupted\n");
             return 1;
         }
     }
