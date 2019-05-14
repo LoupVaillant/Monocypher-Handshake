@@ -289,15 +289,15 @@ int crypto_kex_should_receive(crypto_kex_ctx *ctx)
 
 size_t crypto_kex_next_message_min_size(crypto_kex_ctx *ctx)
 {
-    unsigned has_key = ctx->flags & HAS_KEY;
+    unsigned has_key = ctx->flags & HAS_KEY ? 16 : 0;
     uint16_t message = ctx->messages[0];
     size_t   size    = 0;
     while (message != 0) {
-        size    += (message & 7) <= 2 ? 32 : 0;
-        has_key |= (message & 7) >= 3 ?  1 : 0;
+        if ((message & 7) >= 3) { has_key = 16;         }
+        if ((message & 7) <= 2) { size += 32 + has_key; }
         message >>= 3;
     }
-    return size + (has_key ? 16 : 0);
+    return size + has_key;
 }
 
 ////////////////

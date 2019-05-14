@@ -1,7 +1,16 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <monocypher.h>
 #include "monokex.h"
 #include "utils.h"
+
+void check(int condition, const char *error)
+{
+    if (!condition) {
+        fprintf(stderr, "%s", error);
+        exit(1);
+    }
+}
 
 int main()
 {
@@ -21,18 +30,30 @@ int main()
                                    server_sk, server_pk);
 
         u8 msg1[32];
+        check(crypto_kex_next_message_min_size(&client_ctx) == 32,
+              "wrong size for msg1 (client)");
+        check(crypto_kex_next_message_min_size(&server_ctx) == 32,
+              "wrong size for msg1 (server)");
         crypto_kex_send       (&client_ctx, msg1, 32);
         if (crypto_kex_receive(&server_ctx, msg1, 32)) {
             fprintf(stderr, "msg1 corrupted\n");
             return 1;
         }
         u8 msg2[48];
+        check(crypto_kex_next_message_min_size(&client_ctx) == 48,
+              "wrong size for msg1 (client)");
+        check(crypto_kex_next_message_min_size(&server_ctx) == 48,
+              "wrong size for msg1 (server)");
         crypto_kex_send       (&server_ctx, msg2, 48);
         if (crypto_kex_receive(&client_ctx, msg2, 48)) {
             fprintf(stderr, "msg2 corrupted\n");
             return 1;
         }
         u8 msg3[64];
+        check(crypto_kex_next_message_min_size(&client_ctx) == 64,
+              "wrong size for msg1 (client)");
+        check(crypto_kex_next_message_min_size(&server_ctx) == 64,
+              "wrong size for msg1 (server)");
         crypto_kex_send       (&client_ctx, msg3, 64);
         if (crypto_kex_receive(&server_ctx, msg3, 64)) {
             fprintf(stderr, "msg3 corrupted\n");
@@ -93,6 +114,10 @@ int main()
         crypto_kex_x_init_server(&server_ctx, server_sk, server_pk);
 
         u8 msg[96];
+        check(crypto_kex_next_message_min_size(&client_ctx) == 96,
+              "wrong size for msg1 (client)");
+        check(crypto_kex_next_message_min_size(&server_ctx) == 96,
+              "wrong size for msg1 (server)");
         crypto_kex_send       (&client_ctx, msg, 96);
         if (crypto_kex_receive(&server_ctx, msg, 96)) {
             fprintf(stderr, "msg corrupted\n");
