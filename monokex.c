@@ -258,6 +258,31 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
     return 0;
 }
 
+///////////////
+/// Outputs ///
+///////////////
+void crypto_kex_get_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
+{
+    if (!(ctx->flags & HAS_REMOTE)) {
+        WIPE_CTX(ctx);
+        return;
+    }
+    copy(key, ctx->remote_pk, 32);
+    ctx->flags &= ~GETS_REMOTE;
+}
+
+void crypto_kex_get_session_key(crypto_kex_ctx *ctx,
+                                u8 key[32], u8 extra[32])
+{
+    if (crypto_kex_should_get_keys(ctx)) {
+        copy(key, ctx->hash, 32);
+        if (extra != 0) {
+            copy(extra, ctx->hash + 32, 32);
+        }
+    }
+    WIPE_CTX(ctx);
+}
+
 //////////////
 /// Status ///
 //////////////
@@ -299,31 +324,6 @@ size_t crypto_kex_next_message_min_size(crypto_kex_ctx *ctx)
         message >>= 3;
     }
     return size + has_key;
-}
-
-////////////////
-/// Get keys ///
-////////////////
-void crypto_kex_get_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
-{
-    if (!(ctx->flags & HAS_REMOTE)) {
-        WIPE_CTX(ctx);
-        return;
-    }
-    copy(key, ctx->remote_pk, 32);
-    ctx->flags &= ~GETS_REMOTE;
-}
-
-void crypto_kex_get_session_key(crypto_kex_ctx *ctx,
-                                u8 key[32], u8 extra[32])
-{
-    if (crypto_kex_should_get_keys(ctx)) {
-        copy(key, ctx->hash, 32);
-        if (extra != 0) {
-            copy(extra, ctx->hash + 32, 32);
-        }
-    }
-    WIPE_CTX(ctx);
 }
 
 ///////////
