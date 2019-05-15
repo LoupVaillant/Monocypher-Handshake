@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <monocypher.h>
 #include "monokex.h"
 #include "utils.h"
 
-void check(int condition, const char *error)
+static void check(int condition, const char *error)
 {
     if (!condition) {
         fprintf(stderr, "%s\n", error);
@@ -12,171 +13,112 @@ void check(int condition, const char *error)
     }
 }
 
+typedef struct {
+    crypto_kex_ctx ctx;
+    crypto_kex_action action;
+    u8 session_key[32];
+    u8 extra_key  [32];
+    u8 remote_key [32];
+} handshake_ctx;
+
+static void step(handshake_ctx *ctx, u8 *msg)
+{
+    size_t msg_size = crypto_kex_next_message_min_size(&ctx->ctx);
+    ctx->action     = crypto_kex_next_action(&ctx->ctx);
+    switch (ctx->action) {
+    case CRYPTO_KEX_SEND:
+        crypto_kex_send(&ctx->ctx, msg, msg_size);
+        return;
+    case CRYPTO_KEX_RECEIVE:
+        check(!crypto_kex_receive(&ctx->ctx, msg, msg_size), "corrupt message");
+        return;
+    case CRYPTO_KEX_GET_REMOTE_KEY:
+        crypto_kex_get_remote_key(&ctx->ctx, ctx->remote_key);
+        return;
+    case CRYPTO_KEX_GET_SESSION_KEY:
+        crypto_kex_get_session_key(&ctx->ctx, ctx->session_key, ctx->extra_key);
+        return;
+    default: check(0, "One step too many");
+    }
+    return;
+}
+
+static void respond(handshake_ctx *ctx, u8 *msg)
+{
+    do {
+        if (ctx->action == CRYPTO_KEX_GET_SESSION_KEY) { break; }
+        step(ctx, msg);
+    }  while (ctx->action != CRYPTO_KEX_SEND &&
+              ctx->action != CRYPTO_KEX_GET_SESSION_KEY);
+}
+
+void session(handshake_ctx *client_ctx,
+             handshake_ctx *server_ctx,
+             u8 client_key[32],
+             u8 server_key[32])
+{
+    client_ctx->action = CRYPTO_KEX_NOTHING;
+    server_ctx->action = CRYPTO_KEX_NOTHING;
+
+    u8 msg[96]; // maximum size of messages without payloads
+    while (client_ctx->action != CRYPTO_KEX_GET_SESSION_KEY ||
+           server_ctx->action != CRYPTO_KEX_GET_SESSION_KEY) {
+        respond(client_ctx, msg);
+        respond(server_ctx, msg);
+    }
+    check(!crypto_verify32(client_ctx->session_key, server_ctx->session_key),
+          "Different session keys");
+    check(!crypto_verify32(client_ctx->extra_key, server_ctx->extra_key),
+          "Different extra keys");
+    check(!crypto_verify32(server_ctx->remote_key, client_key),
+          "Server has wrong client key");
+    check(!crypto_verify32(client_ctx->remote_key, server_key),
+          "Client has wrong server key");
+}
+
+void xk1_session()
+{
+    RANDOM_INPUT(client_sk, 32);
+    RANDOM_INPUT(server_sk, 32);
+    RANDOM_INPUT(client_seed, 32);
+    RANDOM_INPUT(server_seed, 32);
+    u8 client_pk[32];  crypto_key_exchange_public_key(client_pk, client_sk);
+    u8 server_pk[32];  crypto_key_exchange_public_key(server_pk, server_sk);
+
+    handshake_ctx client_ctx;
+    crypto_kex_xk1_init_client(&client_ctx.ctx, client_seed,
+                               client_sk, client_pk, server_pk);
+    memcpy(client_ctx.remote_key, server_pk, 32);
+
+    handshake_ctx server_ctx;
+    crypto_kex_xk1_init_server(&server_ctx.ctx, server_seed,
+                               server_sk, server_pk);
+
+    session(&client_ctx, &server_ctx, client_pk, server_pk);
+}
+
+void x_session()
+{
+    RANDOM_INPUT(client_sk, 32);
+    RANDOM_INPUT(server_sk, 32);
+    RANDOM_INPUT(client_seed, 32);
+    u8 client_pk[32];  crypto_key_exchange_public_key(client_pk, client_sk);
+    u8 server_pk[32];  crypto_key_exchange_public_key(server_pk, server_sk);
+
+    handshake_ctx client_ctx;
+    crypto_kex_x_init_client(&client_ctx.ctx, client_seed,
+                             client_sk, client_pk, server_pk);
+    memcpy(client_ctx.remote_key, server_pk, 32);
+
+    handshake_ctx server_ctx;
+    crypto_kex_x_init_server(&server_ctx.ctx, server_sk, server_pk);
+
+    session(&client_ctx, &server_ctx, client_pk, server_pk);
+}
+
 int main()
 {
-    FOR(i, 0, 250) {
-        RANDOM_INPUT(client_sk, 32);
-        RANDOM_INPUT(server_sk, 32);
-        RANDOM_INPUT(client_seed, 32);
-        RANDOM_INPUT(server_seed, 32);
-        u8 client_pk[32];  crypto_key_exchange_public_key(client_pk, client_sk);
-        u8 server_pk[32];  crypto_key_exchange_public_key(server_pk, server_sk);
-
-        crypto_kex_ctx client_ctx;
-        crypto_kex_xk1_init_client(&client_ctx, client_seed,
-                                   client_sk, client_pk, server_pk);
-        crypto_kex_ctx server_ctx;
-        crypto_kex_xk1_init_server(&server_ctx, server_seed,
-                                   server_sk, server_pk);
-
-        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_SEND,
-              "0: client should send");
-        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_RECEIVE,
-              "0: server should receive");
-        u8 msg1[32];
-        check(crypto_kex_next_message_min_size(&client_ctx) == 32,
-              "wrong size for msg1 (client)");
-        check(crypto_kex_next_message_min_size(&server_ctx) == 32,
-              "wrong size for msg1 (server)");
-        crypto_kex_send       (&client_ctx, msg1, 32);
-        if (crypto_kex_receive(&server_ctx, msg1, 32)) {
-            fprintf(stderr, "msg1 corrupted\n");
-            return 1;
-        }
-        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_RECEIVE,
-              "1: client should receive");
-        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_SEND,
-              "1: server should send");
-        u8 msg2[48];
-        check(crypto_kex_next_message_min_size(&client_ctx) == 48,
-              "wrong size for msg1 (client)");
-        check(crypto_kex_next_message_min_size(&server_ctx) == 48,
-              "wrong size for msg1 (server)");
-        crypto_kex_send       (&server_ctx, msg2, 48);
-        if (crypto_kex_receive(&client_ctx, msg2, 48)) {
-            fprintf(stderr, "msg2 corrupted\n");
-            return 1;
-        }
-        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_SEND,
-              "2: client should send");
-        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_RECEIVE,
-              "2: server should receive");
-        u8 msg3[64];
-        check(crypto_kex_next_message_min_size(&client_ctx) == 64,
-              "wrong size for msg1 (client)");
-        check(crypto_kex_next_message_min_size(&server_ctx) == 64,
-              "wrong size for msg1 (server)");
-        crypto_kex_send       (&client_ctx, msg3, 64);
-        if (crypto_kex_receive(&server_ctx, msg3, 64)) {
-            fprintf(stderr, "msg3 corrupted\n");
-            return 1;
-        }
-        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_GET_SESSION_KEY,
-              "3: client should get session key");
-        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_GET_REMOTE_KEY,
-              "3: server should get remote key");
-
-        u8 remote_pk[32]; // same as client_pk
-        crypto_kex_get_remote_key(&server_ctx, remote_pk);
-
-        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_GET_SESSION_KEY,
-              "4: server should get session key");
-
-        u8 client_session_key1[32];
-        u8 client_session_key2[32];
-        crypto_kex_get_session_key(&client_ctx,
-                                   client_session_key1,
-                                   client_session_key2);
-        u8 server_session_key1[32];
-        u8 server_session_key2[32];
-        crypto_kex_get_session_key(&server_ctx,
-                                   server_session_key1,
-                                   server_session_key2);
-
-        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_NOTHING,
-              "5: client should do nothing");
-        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_NOTHING,
-              "5: server should do nothing");
-
-        if (crypto_verify32(client_session_key1, server_session_key1) ||
-            crypto_verify32(client_session_key2, server_session_key2)) {
-            fprintf(stderr, "Different session keys\n");
-            return 1;
-        }
-        if (crypto_verify32(remote_pk, client_pk)) {
-            fprintf(stderr, "Server got the wrong client public key\n");
-            return 1;
-        }
-    }
-    printf("OK: 3 way handshake\n");
-
-    FOR (i, 0, 250) {
-        RANDOM_INPUT(client_sk, 32);
-        RANDOM_INPUT(server_sk, 32);
-        RANDOM_INPUT(client_seed, 32);
-        RANDOM_INPUT(server_seed, 32);
-        u8 client_pk[32];  crypto_key_exchange_public_key(client_pk, client_sk);
-        u8 server_pk[32];  crypto_key_exchange_public_key(server_pk, server_sk);
-
-        crypto_kex_ctx client_ctx;
-        crypto_kex_x_init_client(&client_ctx, client_seed,
-                                 client_sk, client_pk, server_pk);
-        crypto_kex_ctx server_ctx;
-        crypto_kex_x_init_server(&server_ctx, server_sk, server_pk);
-
-        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_SEND,
-              "0: client should send");
-        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_RECEIVE,
-              "0: server should receive");
-        u8 msg[96];
-        check(crypto_kex_next_message_min_size(&client_ctx) == 96,
-              "wrong size for msg1 (client)");
-        check(crypto_kex_next_message_min_size(&server_ctx) == 96,
-              "wrong size for msg1 (server)");
-        crypto_kex_send       (&client_ctx, msg, 96);
-        if (crypto_kex_receive(&server_ctx, msg, 96)) {
-            fprintf(stderr, "msg corrupted\n");
-            return 1;
-        }
-
-        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_GET_SESSION_KEY,
-              "1: client should get session key");
-        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_GET_REMOTE_KEY,
-              "1: server should get remote key");
-
-        u8 remote_pk[32]; // same as client_pk
-        crypto_kex_get_remote_key(&server_ctx, remote_pk);
-
-        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_GET_SESSION_KEY,
-              "2: server should get session key");
-
-        u8 client_session_key1[32];
-        u8 client_session_key2[32];
-        crypto_kex_get_session_key(&client_ctx,
-                                   client_session_key1,
-                                   client_session_key2);
-        u8 server_session_key1[32];
-        u8 server_session_key2[32];
-        crypto_kex_get_session_key(&server_ctx,
-                                   server_session_key1,
-                                   server_session_key2);
-
-        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_NOTHING,
-              "3: client should do nothing");
-        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_NOTHING,
-              "3: server should do nothing");
-
-        if (crypto_verify32(client_session_key1, server_session_key1) ||
-            crypto_verify32(client_session_key2, server_session_key2)) {
-            fprintf(stderr, "Different session keys\n");
-            return 1;
-        }
-        if (crypto_verify32(remote_pk, client_pk)) {
-            fprintf(stderr, "Server got the wrong client public key\n");
-            return 1;
-        }
-    }
-    printf("OK: 1 way handshake\n");
-
+    FOR(i, 0, 250) { xk1_session(); } printf("xk1 session OK\n");
+    FOR(i, 0, 250) { x_session();   } printf("x   session OK\n");
     return 0;
 }
