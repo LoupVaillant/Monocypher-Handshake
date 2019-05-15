@@ -13,6 +13,14 @@ typedef struct {
     unsigned short flags;
 } crypto_kex_ctx;
 
+typedef enum {
+    CRYPTO_KEX_SEND,
+    CRYPTO_KEX_RECEIVE,
+    CRYPTO_KEX_GET_REMOTE_KEY,
+    CRYPTO_KEX_GET_SESSION_KEY,
+    CRYPTO_KEX_NOTHING,
+} crypto_kex_action;
+
 // Basic send & receive functions
 void crypto_kex_send(crypto_kex_ctx *ctx,
                      uint8_t *message, size_t message_size);
@@ -29,16 +37,14 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
                          uint8_t       *payload, size_t payload_size,
                          const uint8_t *message, size_t message_size);
 
-// outputs
+// Outputs
 void crypto_kex_get_remote_key (crypto_kex_ctx *ctx, uint8_t key[32]);
 void crypto_kex_get_session_key(crypto_kex_ctx *ctx, uint8_t key[32],
                                 uint8_t extra[32]);
 
-// status helpers (not mandatory)
-int    crypto_kex_should_send          (crypto_kex_ctx *ctx);
-int    crypto_kex_should_receive       (crypto_kex_ctx *ctx);
-int    crypto_kex_should_get_remote    (crypto_kex_ctx *ctx);
-int    crypto_kex_should_get_keys      (crypto_kex_ctx *ctx);
+// Next action
+crypto_kex_action crypto_kex_next_action(crypto_kex_ctx *ctx);
+
 size_t crypto_kex_next_message_min_size(crypto_kex_ctx *ctx);
 
 

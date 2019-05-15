@@ -168,7 +168,7 @@ void crypto_kex_send_p(crypto_kex_ctx *ctx,
                        const u8 *p, size_t p_size)
 {
     // Fail if we should not send (the failure is alas delayed)
-    if (!crypto_kex_should_send(ctx)) {
+    if (crypto_kex_next_action(ctx) != CRYPTO_KEX_SEND) {
         WIPE_CTX(ctx);
         return;
     }
@@ -211,7 +211,7 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
                          const u8 *m, size_t m_size)
 {
     // Do nothing & fail if we should not receive
-    if (!crypto_kex_should_receive(ctx)) {
+    if (crypto_kex_next_action(ctx) != CRYPTO_KEX_RECEIVE) {
         WIPE_CTX(ctx);
         return -1;
     }
@@ -274,7 +274,7 @@ void crypto_kex_get_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
 void crypto_kex_get_session_key(crypto_kex_ctx *ctx,
                                 u8 key[32], u8 extra[32])
 {
-    if (crypto_kex_should_get_keys(ctx)) {
+    if (crypto_kex_next_action(ctx) == CRYPTO_KEX_GET_SESSION_KEY) {
         copy(key, ctx->hash, 32);
         if (extra != 0) {
             copy(extra, ctx->hash + 32, 32);
@@ -283,34 +283,19 @@ void crypto_kex_get_session_key(crypto_kex_ctx *ctx,
     WIPE_CTX(ctx);
 }
 
-//////////////
-/// Status ///
-//////////////
-int crypto_kex_should_send(crypto_kex_ctx *ctx)
+///////////////////
+/// Next action ///
+///////////////////
+crypto_kex_action crypto_kex_next_action(crypto_kex_ctx *ctx)
 {
-    return (ctx->flags & IS_OK)
-        && (ctx->flags & SHOULD_SEND)
-        && ctx->messages[0] != 0;
-}
-
-int crypto_kex_should_receive(crypto_kex_ctx *ctx)
-{
-    return  (ctx->flags & IS_OK)
-        && !(ctx->flags & SHOULD_SEND)
-        && ctx->messages[0] != 0;
-}
-
-int crypto_kex_should_get_remote(crypto_kex_ctx *ctx)
-{
-    return (ctx->flags & HAS_REMOTE)
-        && (ctx->flags & GETS_REMOTE);
-}
-
-int crypto_kex_should_get_keys(crypto_kex_ctx *ctx)
-{
-    return (ctx->flags & IS_OK)
-        && ctx->messages[0] == 0
-        && !crypto_kex_should_get_remote(ctx);
+    int should_get_remote =
+        (ctx->flags & HAS_REMOTE) &&
+        (ctx->flags & GETS_REMOTE);
+    return !(ctx->flags & IS_OK)    ? CRYPTO_KEX_NOTHING
+        :  should_get_remote        ? CRYPTO_KEX_GET_REMOTE_KEY
+        :  ctx->messages[0] == 0    ? CRYPTO_KEX_GET_SESSION_KEY
+        :  ctx->flags & SHOULD_SEND ? CRYPTO_KEX_SEND
+        :                             CRYPTO_KEX_RECEIVE;
 }
 
 size_t crypto_kex_next_message_min_size(crypto_kex_ctx *ctx)

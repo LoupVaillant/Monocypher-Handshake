@@ -29,14 +29,10 @@ int main()
         crypto_kex_xk1_init_server(&server_ctx, server_seed,
                                    server_sk, server_pk);
 
-        check(!crypto_kex_should_get_remote(&client_ctx),"client remote     0");
-        check(!crypto_kex_should_get_keys  (&client_ctx),"client should_key 0");
-        check( crypto_kex_should_send      (&client_ctx),"client should_snd 0");
-        check(!crypto_kex_should_receive   (&client_ctx),"client should_rcv 0");
-        check(!crypto_kex_should_get_remote(&server_ctx),"server remote     0");
-        check(!crypto_kex_should_get_keys  (&server_ctx),"server should_key 0");
-        check(!crypto_kex_should_send      (&server_ctx),"server should_snd 0");
-        check( crypto_kex_should_receive   (&server_ctx),"server should_rcv 0");
+        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_SEND,
+              "0: client should send");
+        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_RECEIVE,
+              "0: server should receive");
         u8 msg1[32];
         check(crypto_kex_next_message_min_size(&client_ctx) == 32,
               "wrong size for msg1 (client)");
@@ -47,14 +43,10 @@ int main()
             fprintf(stderr, "msg1 corrupted\n");
             return 1;
         }
-        check(!crypto_kex_should_get_remote(&client_ctx),"client remote     1");
-        check(!crypto_kex_should_get_keys  (&client_ctx),"client should_key 1");
-        check(!crypto_kex_should_send      (&client_ctx),"client should_snd 1");
-        check( crypto_kex_should_receive   (&client_ctx),"client should_rcv 1");
-        check(!crypto_kex_should_get_remote(&server_ctx),"server remote     1");
-        check(!crypto_kex_should_get_keys  (&server_ctx),"server should_key 1");
-        check( crypto_kex_should_send      (&server_ctx),"server should_snd 1");
-        check(!crypto_kex_should_receive   (&server_ctx),"server should_rcv 1");
+        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_RECEIVE,
+              "1: client should receive");
+        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_SEND,
+              "1: server should send");
         u8 msg2[48];
         check(crypto_kex_next_message_min_size(&client_ctx) == 48,
               "wrong size for msg1 (client)");
@@ -65,14 +57,10 @@ int main()
             fprintf(stderr, "msg2 corrupted\n");
             return 1;
         }
-        check(!crypto_kex_should_get_remote(&client_ctx),"client remote     2");
-        check(!crypto_kex_should_get_keys  (&client_ctx),"client should_key 2");
-        check( crypto_kex_should_send      (&client_ctx),"client should_snd 2");
-        check(!crypto_kex_should_receive   (&client_ctx),"client should_rcv 2");
-        check(!crypto_kex_should_get_remote(&server_ctx),"server remote     2");
-        check(!crypto_kex_should_get_keys  (&server_ctx),"server should_key 2");
-        check(!crypto_kex_should_send      (&server_ctx),"server should_snd 2");
-        check( crypto_kex_should_receive   (&server_ctx),"server should_rcv 2");
+        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_SEND,
+              "2: client should send");
+        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_RECEIVE,
+              "2: server should receive");
         u8 msg3[64];
         check(crypto_kex_next_message_min_size(&client_ctx) == 64,
               "wrong size for msg1 (client)");
@@ -83,44 +71,32 @@ int main()
             fprintf(stderr, "msg3 corrupted\n");
             return 1;
         }
-        check(!crypto_kex_should_get_remote(&client_ctx),"client remote     3");
-        check( crypto_kex_should_get_keys  (&client_ctx),"client should_key 3");
-        check(!crypto_kex_should_send      (&client_ctx),"client should_snd 3");
-        check(!crypto_kex_should_receive   (&client_ctx),"client should_rcv 3");
-        check( crypto_kex_should_get_remote(&server_ctx),"server remote     3");
-        check(!crypto_kex_should_get_keys  (&server_ctx),"server should_key 3");
-        check(!crypto_kex_should_send      (&server_ctx),"server should_snd 3");
-        check(!crypto_kex_should_receive   (&server_ctx),"server should_rcv 3");
+        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_GET_SESSION_KEY,
+              "3: client should get session key");
+        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_GET_REMOTE_KEY,
+              "3: server should get remote key");
 
         u8 remote_pk[32]; // same as client_pk
         crypto_kex_get_remote_key(&server_ctx, remote_pk);
 
-        check(!crypto_kex_should_get_remote(&server_ctx),"server remote     4");
-        check( crypto_kex_should_get_keys  (&server_ctx),"server should_key 4");
-        check(!crypto_kex_should_send      (&server_ctx),"server should_snd 4");
-        check(!crypto_kex_should_receive   (&server_ctx),"server should_rcv 4");
+        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_GET_SESSION_KEY,
+              "4: server should get session key");
 
         u8 client_session_key1[32];
         u8 client_session_key2[32];
         crypto_kex_get_session_key(&client_ctx,
                                    client_session_key1,
                                    client_session_key2);
-
-        check(!crypto_kex_should_get_remote(&client_ctx),"client remote     5");
-        check(!crypto_kex_should_get_keys  (&client_ctx),"client should_key 5");
-        check(!crypto_kex_should_send      (&client_ctx),"client should_snd 5");
-        check(!crypto_kex_should_receive   (&client_ctx),"client should_rcv 5");
-
         u8 server_session_key1[32];
         u8 server_session_key2[32];
         crypto_kex_get_session_key(&server_ctx,
                                    server_session_key1,
                                    server_session_key2);
 
-        check(!crypto_kex_should_get_remote(&server_ctx),"server remote     5");
-        check(!crypto_kex_should_get_keys  (&server_ctx),"server should_key 5");
-        check(!crypto_kex_should_send      (&server_ctx),"server should_snd 5");
-        check(!crypto_kex_should_receive   (&server_ctx),"server should_rcv 5");
+        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_NOTHING,
+              "5: client should do nothing");
+        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_NOTHING,
+              "5: server should do nothing");
 
         if (crypto_verify32(client_session_key1, server_session_key1) ||
             crypto_verify32(client_session_key2, server_session_key2)) {
@@ -148,14 +124,10 @@ int main()
         crypto_kex_ctx server_ctx;
         crypto_kex_x_init_server(&server_ctx, server_sk, server_pk);
 
-        check(!crypto_kex_should_get_remote(&client_ctx),"client remote     0");
-        check(!crypto_kex_should_get_keys  (&client_ctx),"client should_key 0");
-        check( crypto_kex_should_send      (&client_ctx),"client should_snd 0");
-        check(!crypto_kex_should_receive   (&client_ctx),"client should_rcv 0");
-        check(!crypto_kex_should_get_remote(&server_ctx),"server remote     0");
-        check(!crypto_kex_should_get_keys  (&server_ctx),"server should_key 0");
-        check(!crypto_kex_should_send      (&server_ctx),"server should_snd 0");
-        check( crypto_kex_should_receive   (&server_ctx),"server should_rcv 0");
+        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_SEND,
+              "0: client should send");
+        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_RECEIVE,
+              "0: server should receive");
         u8 msg[96];
         check(crypto_kex_next_message_min_size(&client_ctx) == 96,
               "wrong size for msg1 (client)");
@@ -167,42 +139,32 @@ int main()
             return 1;
         }
 
-        check(!crypto_kex_should_get_remote(&client_ctx),"client remote     1");
-        check( crypto_kex_should_get_keys  (&client_ctx),"client should_key 1");
-        check(!crypto_kex_should_send      (&client_ctx),"client should_snd 1");
-        check(!crypto_kex_should_receive   (&client_ctx),"client should_rcv 1");
-        check( crypto_kex_should_get_remote(&server_ctx),"server remote     1");
-        check(!crypto_kex_should_get_keys  (&server_ctx),"server should_key 1");
-        check(!crypto_kex_should_send      (&server_ctx),"server should_snd 1");
-        check(!crypto_kex_should_receive   (&server_ctx),"server should_rcv 1");
+        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_GET_SESSION_KEY,
+              "1: client should get session key");
+        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_GET_REMOTE_KEY,
+              "1: server should get remote key");
 
         u8 remote_pk[32]; // same as client_pk
         crypto_kex_get_remote_key(&server_ctx, remote_pk);
 
-        check(!crypto_kex_should_get_remote(&server_ctx),"server remote     2");
-        check( crypto_kex_should_get_keys  (&server_ctx),"server should_key 2");
-        check(!crypto_kex_should_send      (&server_ctx),"server should_snd 2");
-        check(!crypto_kex_should_receive   (&server_ctx),"server should_rcv 2");
+        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_GET_SESSION_KEY,
+              "2: server should get session key");
 
         u8 client_session_key1[32];
         u8 client_session_key2[32];
         crypto_kex_get_session_key(&client_ctx,
                                    client_session_key1,
                                    client_session_key2);
-        check(!crypto_kex_should_get_remote(&client_ctx),"client remote     3");
-        check(!crypto_kex_should_get_keys  (&client_ctx),"client should_key 3");
-        check(!crypto_kex_should_send      (&client_ctx),"client should_snd 3");
-        check(!crypto_kex_should_receive   (&client_ctx),"client should_rcv 3");
-
         u8 server_session_key1[32];
         u8 server_session_key2[32];
         crypto_kex_get_session_key(&server_ctx,
                                    server_session_key1,
                                    server_session_key2);
-        check(!crypto_kex_should_get_remote(&server_ctx),"server remote     5");
-        check(!crypto_kex_should_get_keys  (&server_ctx),"server should_key 5");
-        check(!crypto_kex_should_send      (&server_ctx),"server should_snd 5");
-        check(!crypto_kex_should_receive   (&server_ctx),"server should_rcv 5");
+
+        check(crypto_kex_next_action(&client_ctx) == CRYPTO_KEX_NOTHING,
+              "3: client should do nothing");
+        check(crypto_kex_next_action(&server_ctx) == CRYPTO_KEX_NOTHING,
+              "3: server should do nothing");
 
         if (crypto_verify32(client_session_key1, server_session_key1) ||
             crypto_verify32(client_session_key2, server_session_key2)) {
