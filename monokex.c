@@ -44,8 +44,10 @@ static void encrypt(u8 *out, const u8 *in, size_t size, const u8 key[32])
 /////////////////////
 /// State machine ///
 /////////////////////
-static void kex_mix_hash(crypto_kex_ctx *ctx,
-                         const u8 *buf, size_t buf_size)
+
+#define kex_mix_hash crypto_kex_add_prelude // it's the same thing
+
+void kex_mix_hash(crypto_kex_ctx *ctx, const u8 *buf, size_t buf_size)
 {
     crypto_blake2b_ctx blake_ctx;
     crypto_blake2b_init  (&blake_ctx);

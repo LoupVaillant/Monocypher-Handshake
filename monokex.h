@@ -37,6 +37,9 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
                          uint8_t       *payload, size_t payload_size,
                          const uint8_t *message, size_t message_size);
 
+void crypto_kex_add_prelude(crypto_kex_ctx *ctx,
+                            const uint8_t *prelude, size_t prelude_size);
+
 // Outputs
 void crypto_kex_get_remote_key (crypto_kex_ctx *ctx, uint8_t key[32]);
 void crypto_kex_get_session_key(crypto_kex_ctx *ctx, uint8_t key[32],
