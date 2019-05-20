@@ -97,7 +97,7 @@ typedef struct {
 
 static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
 {
-    while (1) {
+    do {
         int    has_pld  = i->has_payload[ctx->msg_num];
         u8     pld_size = has_pld ? i->payload_size[ctx->msg_num] : 0;
         size_t msg_size = crypto_kex_next_message_min_size(&ctx->ctx)
@@ -109,7 +109,7 @@ static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
             memcpy(ctx->messages[ctx->msg_num], msg, msg_size);
             memcpy(ctx->payloads[ctx->msg_num], pld, pld_size);
             ctx->msg_num++;
-            return;
+            break;
         }
         case CRYPTO_KEX_RECEIVE: {
             u8 *pld = ctx->payloads[ctx->msg_num];
@@ -119,20 +119,21 @@ static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
                   "corrupt message");
             memcpy(ctx->messages[ctx->msg_num], msg, msg_size);
             ctx->msg_num++;
-            continue;
+            break;
         }
         case CRYPTO_KEX_GET_REMOTE_KEY:
             crypto_kex_get_remote_key(&ctx->ctx, ctx->remote_key);
-            continue;
+            break;
         case CRYPTO_KEX_GET_SESSION_KEY:
             crypto_kex_get_session_key(&ctx->ctx,
                                        ctx->session_key,
                                        ctx->extra_key);
-            return;
-        default: // CRYPTO_KEX_NOTHING
-            return;
+            break;
+        default:
+            break;
         }
-    }
+    } while (crypto_kex_next_action(&ctx->ctx) != CRYPTO_KEX_NOTHING &&
+             crypto_kex_next_action(&ctx->ctx) != CRYPTO_KEX_RECEIVE);
 }
 
 static void session(handshake_ctx *client_ctx,
