@@ -91,28 +91,16 @@ static void get_interactive_session(u8 msg1[32], u8 msg2[48], u8 msg3[64],
     }
 
     u8 remote_pk[32]; // same as client_pk
-    if (!crypto_kex_has_remote_key(&server_ctx)) {
-        fprintf(stderr, "Server does not have client public key\n");
-        return;
-    }
     crypto_kex_get_remote_key(&server_ctx, remote_pk);
 
     u8 client_session_key1[32];
     u8 client_session_key2[32];
-    if (!crypto_kex_is_done(&client_ctx)) {
-        fprintf(stderr, "Client is not finished, cannot get session key\n");
-        return;
-    }
     crypto_kex_get_session_key(&client_ctx,
                                client_session_key1,
                                client_session_key2);
 
     u8 server_session_key1[32];
     u8 server_session_key2[32];
-    if (!crypto_kex_is_done(&server_ctx)) {
-        fprintf(stderr, "Server is not finished, cannot get session key\n");
-        return;
-    }
     crypto_kex_get_session_key(&server_ctx,
                                server_session_key1,
                                server_session_key2);
@@ -218,28 +206,16 @@ static void get_one_way_session(u8 msg[96], u8 client_pk[32], u8 server_pk[32],
     }
 
     u8 remote_pk[32]; // same as client_pk
-    if (!crypto_kex_has_remote_key(&server_ctx)) {
-        fprintf(stderr, "Server does not have client public key\n");
-        return;
-    }
     crypto_kex_get_remote_key(&server_ctx, remote_pk);
 
     u8 client_session_key1[32];
     u8 client_session_key2[32];
-    if (!crypto_kex_is_done(&client_ctx)) {
-        fprintf(stderr, "Client is not finished, cannot get session key\n");
-        return;
-    }
     crypto_kex_get_session_key(&client_ctx,
                                client_session_key1,
                                client_session_key2);
 
     u8 server_session_key1[32];
     u8 server_session_key2[32];
-    if (!crypto_kex_is_done(&server_ctx)) {
-        fprintf(stderr, "Server is not finished, cannot get session key\n");
-        return;
-    }
     crypto_kex_get_session_key(&server_ctx,
                                server_session_key1,
                                server_session_key2);
