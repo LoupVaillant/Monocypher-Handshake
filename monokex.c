@@ -170,7 +170,9 @@ void crypto_kex_send_p(crypto_kex_ctx *ctx,
                        const u8 *p, size_t p_size)
 {
     // Fail if we should not send (the failure is alas delayed)
-    if (crypto_kex_next_action(ctx) != CRYPTO_KEX_SEND) {
+    size_t min_size;
+    if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_SEND ||
+        m_size < min_size + p_size) {
         WIPE_CTX(ctx);
         return;
     }
@@ -205,7 +207,7 @@ void crypto_kex_send_p(crypto_kex_ctx *ctx,
     }
 
     // Pad
-    FOR (i, 0, m_size) { m[i] = 0; } // should blow up if m_size underflows
+    FOR (i, 0, m_size) { m[i] = 0; }
 }
 
 int crypto_kex_receive_p(crypto_kex_ctx *ctx,
@@ -213,7 +215,9 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
                          const u8 *m, size_t m_size)
 {
     // Do nothing & fail if we should not receive
-    if (crypto_kex_next_action(ctx) != CRYPTO_KEX_RECEIVE) {
+    size_t min_size;
+    if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_RECEIVE ||
+        m_size < min_size + p_size) {
         WIPE_CTX(ctx);
         return -1;
     }
@@ -276,7 +280,7 @@ void crypto_kex_get_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
 void crypto_kex_get_session_key(crypto_kex_ctx *ctx,
                                 u8 key[32], u8 extra[32])
 {
-    if (crypto_kex_next_action(ctx) == CRYPTO_KEX_GET_SESSION_KEY) {
+    if (crypto_kex_next_action(ctx, 0) == CRYPTO_KEX_GET_SESSION_KEY) {
         copy(key, ctx->hash, 32);
         if (extra != 0) {
             copy(extra, ctx->hash + 32, 32);
@@ -288,8 +292,22 @@ void crypto_kex_get_session_key(crypto_kex_ctx *ctx,
 ///////////////////
 /// Next action ///
 ///////////////////
-crypto_kex_action crypto_kex_next_action(crypto_kex_ctx *ctx)
+crypto_kex_action crypto_kex_next_action(const crypto_kex_ctx *ctx,
+                                         size_t *next_message_size)
 {
+    // Next message size (if any)
+    if (next_message_size) {
+        unsigned has_key = ctx->flags & HAS_KEY ? 16 : 0;
+        uint16_t message = ctx->messages[0];
+        size_t   size    = 0;
+        while (message != 0) {
+            if ((message & 7) >= 4) { has_key = 16;         }
+            if ((message & 7) <= 3) { size += 32 + has_key; }
+            message >>= 3;
+        }
+        *next_message_size = size + has_key;
+    }
+    // Next action
     int should_get_remote =
         (ctx->flags & HAS_REMOTE) &&
         (ctx->flags & GETS_REMOTE);
@@ -298,19 +316,6 @@ crypto_kex_action crypto_kex_next_action(crypto_kex_ctx *ctx)
         :  ctx->messages[0] == 0    ? CRYPTO_KEX_GET_SESSION_KEY
         :  ctx->flags & SHOULD_SEND ? CRYPTO_KEX_SEND
         :                             CRYPTO_KEX_RECEIVE;
-}
-
-size_t crypto_kex_next_message_min_size(crypto_kex_ctx *ctx)
-{
-    unsigned has_key = ctx->flags & HAS_KEY ? 16 : 0;
-    uint16_t message = ctx->messages[0];
-    size_t   size    = 0;
-    while (message != 0) {
-        if ((message & 7) >= 3) { has_key = 16;         }
-        if ((message & 7) <= 2) { size += 32 + has_key; }
-        message >>= 3;
-    }
-    return size + has_key;
 }
 
 ///////////

@@ -100,9 +100,10 @@ static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
     do {
         int    has_pld  = i->has_payload[ctx->msg_num];
         u8     pld_size = has_pld ? i->payload_size[ctx->msg_num] : 0;
-        size_t msg_size = crypto_kex_next_message_min_size(&ctx->ctx)
-                        + pld_size;
-        switch (crypto_kex_next_action(&ctx->ctx)) {
+        size_t msg_size;
+        crypto_kex_action action = crypto_kex_next_action(&ctx->ctx, &msg_size);
+        msg_size += pld_size;
+        switch (action) {
         case CRYPTO_KEX_SEND: {
             const u8 *pld = i->payloads[ctx->msg_num];
             crypto_kex_send_p(&ctx->ctx, msg, msg_size, pld, pld_size);
@@ -132,8 +133,8 @@ static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
         default:
             break;
         }
-    } while (crypto_kex_next_action(&ctx->ctx) != CRYPTO_KEX_NOTHING &&
-             crypto_kex_next_action(&ctx->ctx) != CRYPTO_KEX_RECEIVE);
+    } while (crypto_kex_next_action(&ctx->ctx, 0) != CRYPTO_KEX_NOTHING &&
+             crypto_kex_next_action(&ctx->ctx, 0) != CRYPTO_KEX_RECEIVE);
 }
 
 static void session(handshake_ctx *client_ctx,
@@ -156,8 +157,8 @@ static void session(handshake_ctx *client_ctx,
     }
 
     u8 msg[128]; // maximum size of messages without 32 bytes payloads
-    while (crypto_kex_next_action(&client_ctx->ctx) != CRYPTO_KEX_NOTHING ||
-           crypto_kex_next_action(&server_ctx->ctx) != CRYPTO_KEX_NOTHING) {
+    while (crypto_kex_next_action(&client_ctx->ctx, 0) != CRYPTO_KEX_NOTHING ||
+           crypto_kex_next_action(&server_ctx->ctx, 0) != CRYPTO_KEX_NOTHING) {
         step(client_ctx, msg, i);
         step(server_ctx, msg, i);
     }

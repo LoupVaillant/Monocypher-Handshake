@@ -46,9 +46,8 @@ void crypto_kex_get_session_key(crypto_kex_ctx *ctx, uint8_t key[32],
                                 uint8_t extra[32]);
 
 // Next action
-crypto_kex_action crypto_kex_next_action(crypto_kex_ctx *ctx);
-
-size_t crypto_kex_next_message_min_size(crypto_kex_ctx *ctx);
+crypto_kex_action crypto_kex_next_action(const crypto_kex_ctx *ctx,
+                                         size_t *next_message_size);
 
 
 ///////////
