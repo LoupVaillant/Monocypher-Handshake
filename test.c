@@ -112,36 +112,30 @@ static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
             ctx->msg_num++;
             break;
         }
-        case CRYPTO_KEX_RECEIVE: {
+        case CRYPTO_KEX_RECV: {
             u8 *pld = ctx->payloads[ctx->msg_num];
-            check(!crypto_kex_receive_p(&ctx->ctx,
-                                        pld, pld_size,
-                                        msg, msg_size),
+            check(!crypto_kex_recv_p(&ctx->ctx, pld, pld_size, msg, msg_size),
                   "corrupt message");
             memcpy(ctx->messages[ctx->msg_num], msg, msg_size);
             ctx->msg_num++;
             break;
         }
-        case CRYPTO_KEX_GET_REMOTE_KEY:
-            crypto_kex_get_remote_key(&ctx->ctx, ctx->remote_key);
+        case CRYPTO_KEX_REMOTE_KEY:
+            crypto_kex_remote_key(&ctx->ctx, ctx->remote_key);
             break;
-        case CRYPTO_KEX_GET_SESSION_KEY:
-            crypto_kex_get_session_key(&ctx->ctx,
-                                       ctx->session_key,
-                                       ctx->extra_key);
+        case CRYPTO_KEX_FINAL:
+            crypto_kex_final(&ctx->ctx, ctx->session_key, ctx->extra_key);
             break;
         default:
             break;
         }
-    } while (crypto_kex_next_action(&ctx->ctx, 0) != CRYPTO_KEX_NOTHING &&
-             crypto_kex_next_action(&ctx->ctx, 0) != CRYPTO_KEX_RECEIVE);
+    } while (crypto_kex_next_action(&ctx->ctx, 0) != CRYPTO_KEX_NONE &&
+             crypto_kex_next_action(&ctx->ctx, 0) != CRYPTO_KEX_RECV);
 }
 
 static void session(handshake_ctx *client_ctx,
                     handshake_ctx *server_ctx,
-                    const inputs *i,
-                    const u8 client_key[32],
-                    const u8 server_key[32])
+                    const inputs *i)
 {
     client_ctx->msg_num = 0;
     server_ctx->msg_num = 0;
@@ -157,8 +151,8 @@ static void session(handshake_ctx *client_ctx,
     }
 
     u8 msg[128]; // maximum size of messages without 32 bytes payloads
-    while (crypto_kex_next_action(&client_ctx->ctx, 0) != CRYPTO_KEX_NOTHING ||
-           crypto_kex_next_action(&server_ctx->ctx, 0) != CRYPTO_KEX_NOTHING) {
+    while (crypto_kex_next_action(&client_ctx->ctx, 0) != CRYPTO_KEX_NONE ||
+           crypto_kex_next_action(&server_ctx->ctx, 0) != CRYPTO_KEX_NONE) {
         step(client_ctx, msg, i);
         step(server_ctx, msg, i);
     }
@@ -171,6 +165,13 @@ static void session(handshake_ctx *client_ctx,
     /* printf("----------------\n"); */
     /* print_handshake(server_ctx); */
 
+}
+
+static void compare(handshake_ctx *client_ctx,
+                    handshake_ctx *server_ctx,
+                    const u8 client_key[32],
+                    const u8 server_key[32])
+{
     check_equal(client_ctx->session_key, server_ctx->session_key, 32,
           "Different session keys");
     check_equal(client_ctx->extra_key, server_ctx->extra_key, 32,
@@ -199,15 +200,16 @@ static void xk1_session(unsigned nb)
     u8 server_seed[32];  memcpy(server_seed, i.server_seed, 32);
 
     handshake_ctx client_ctx;
-    crypto_kex_xk1_init_client(&client_ctx.ctx, client_seed,
+    crypto_kex_xk1_client_init(&client_ctx.ctx, client_seed,
                                i.client_sk, client_pk, server_pk);
     memcpy(client_ctx.remote_key, server_pk, 32);
 
     handshake_ctx server_ctx;
-    crypto_kex_xk1_init_server(&server_ctx.ctx, server_seed,
+    crypto_kex_xk1_server_init(&server_ctx.ctx, server_seed,
                                i.server_sk, server_pk);
 
-    session(&client_ctx, &server_ctx, &i, client_pk, server_pk);
+    session(&client_ctx, &server_ctx, &i);
+    compare(&client_ctx, &server_ctx, client_pk, server_pk);
 }
 
 void x_session(unsigned nb)
@@ -219,14 +221,15 @@ void x_session(unsigned nb)
     u8 client_seed[32];  memcpy(client_seed, i.client_seed, 32);
 
     handshake_ctx client_ctx;
-    crypto_kex_x_init_client(&client_ctx.ctx, client_seed,
+    crypto_kex_x_client_init(&client_ctx.ctx, client_seed,
                              i.client_sk, client_pk, server_pk);
     memcpy(client_ctx.remote_key, server_pk, 32);
 
     handshake_ctx server_ctx;
-    crypto_kex_x_init_server(&server_ctx.ctx, i.server_sk, server_pk);
+    crypto_kex_x_server_init(&server_ctx.ctx, i.server_sk, server_pk);
 
-    session(&client_ctx, &server_ctx, &i, client_pk, server_pk);
+    session(&client_ctx, &server_ctx, &i);
+    compare(&client_ctx, &server_ctx, client_pk, server_pk);
 }
 
 int main()

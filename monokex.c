@@ -156,10 +156,10 @@ void crypto_kex_send(crypto_kex_ctx *ctx,
     crypto_kex_send_p(ctx, message, message_size, 0, 0);
 }
 
-int crypto_kex_receive(crypto_kex_ctx *ctx,
-                        const u8 *message, size_t message_size)
+int crypto_kex_recv(crypto_kex_ctx *ctx,
+                    const u8 *message, size_t message_size)
 {
-    return crypto_kex_receive_p(ctx, 0, 0, message, message_size);
+    return crypto_kex_recv_p(ctx, 0, 0, message, message_size);
 }
 
 #define SKIP(i)   m += (i); m_size -= (i)
@@ -210,13 +210,13 @@ void crypto_kex_send_p(crypto_kex_ctx *ctx,
     FOR (i, 0, m_size) { m[i] = 0; }
 }
 
-int crypto_kex_receive_p(crypto_kex_ctx *ctx,
-                         u8       *p, size_t p_size,
-                         const u8 *m, size_t m_size)
+int crypto_kex_recv_p(crypto_kex_ctx *ctx,
+                      u8       *p, size_t p_size,
+                      const u8 *m, size_t m_size)
 {
     // Do nothing & fail if we should not receive
     size_t min_size;
-    if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_RECEIVE ||
+    if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_RECV ||
         m_size < min_size + p_size) {
         WIPE_CTX(ctx);
         return -1;
@@ -267,7 +267,7 @@ int crypto_kex_receive_p(crypto_kex_ctx *ctx,
 ///////////////
 /// Outputs ///
 ///////////////
-void crypto_kex_get_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
+void crypto_kex_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
 {
     if (!(ctx->flags & HAS_REMOTE)) {
         WIPE_CTX(ctx);
@@ -277,10 +277,10 @@ void crypto_kex_get_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
     ctx->flags &= ~GETS_REMOTE;
 }
 
-void crypto_kex_get_session_key(crypto_kex_ctx *ctx,
+void crypto_kex_final(crypto_kex_ctx *ctx,
                                 u8 key[32], u8 extra[32])
 {
-    if (crypto_kex_next_action(ctx, 0) == CRYPTO_KEX_GET_SESSION_KEY) {
+    if (crypto_kex_next_action(ctx, 0) == CRYPTO_KEX_FINAL) {
         copy(key, ctx->hash, 32);
         if (extra != 0) {
             copy(extra, ctx->hash + 32, 32);
@@ -311,11 +311,11 @@ crypto_kex_action crypto_kex_next_action(const crypto_kex_ctx *ctx,
     int should_get_remote =
         (ctx->flags & HAS_REMOTE) &&
         (ctx->flags & GETS_REMOTE);
-    return !(ctx->flags & IS_OK)    ? CRYPTO_KEX_NOTHING
-        :  should_get_remote        ? CRYPTO_KEX_GET_REMOTE_KEY
-        :  ctx->messages[0] == 0    ? CRYPTO_KEX_GET_SESSION_KEY
+    return !(ctx->flags & IS_OK)    ? CRYPTO_KEX_NONE
+        :  should_get_remote        ? CRYPTO_KEX_REMOTE_KEY
+        :  ctx->messages[0] == 0    ? CRYPTO_KEX_FINAL
         :  ctx->flags & SHOULD_SEND ? CRYPTO_KEX_SEND
-        :                             CRYPTO_KEX_RECEIVE;
+        :                             CRYPTO_KEX_RECV;
 }
 
 ///////////
@@ -323,7 +323,7 @@ crypto_kex_action crypto_kex_next_action(const crypto_kex_ctx *ctx,
 ///////////
 static const u8 pid_xk1[32] = "Monokex XK1";
 
-void crypto_kex_xk1_init_client(crypto_kex_ctx *ctx,
+void crypto_kex_xk1_client_init(crypto_kex_ctx *ctx,
                                 u8              random_seed[32],
                                 const u8        client_sk  [32],
                                 const u8        client_pk  [32],
@@ -341,7 +341,7 @@ void crypto_kex_xk1_init_client(crypto_kex_ctx *ctx,
     ctx->messages[3] = 0;
 }
 
-void crypto_kex_xk1_init_server(crypto_kex_ctx *ctx,
+void crypto_kex_xk1_server_init(crypto_kex_ctx *ctx,
                                 u8              random_seed[32],
                                 const u8        server_sk  [32],
                                 const u8        server_pk  [32])
@@ -362,7 +362,7 @@ void crypto_kex_xk1_init_server(crypto_kex_ctx *ctx,
 /////////
 static const u8 pid_x[32] = "Monokex X";
 
-void crypto_kex_x_init_client(crypto_kex_ctx *ctx,
+void crypto_kex_x_client_init(crypto_kex_ctx *ctx,
                               u8              random_seed[32],
                               const u8        client_sk  [32],
                               const u8        client_pk  [32],
@@ -380,7 +380,7 @@ void crypto_kex_x_init_client(crypto_kex_ctx *ctx,
     ctx->messages[3] = 0;
 }
 
-void crypto_kex_x_init_server(crypto_kex_ctx *ctx,
+void crypto_kex_x_server_init(crypto_kex_ctx *ctx,
                               const u8        server_sk [32],
                               const u8        server_pk [32])
 {
