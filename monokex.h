@@ -14,8 +14,8 @@ typedef struct {
 } crypto_kex_ctx;
 
 typedef enum {
-    CRYPTO_KEX_SEND,
-    CRYPTO_KEX_RECV,
+    CRYPTO_KEX_READ,
+    CRYPTO_KEX_WRITE,
     CRYPTO_KEX_REMOTE_KEY,
     CRYPTO_KEX_FINAL,
     CRYPTO_KEX_NONE,
@@ -25,20 +25,20 @@ typedef enum {
 // Maximum message size is 96 bytes
 // If message_size is bigger than the actual message, the message will
 // be padded with zeroes.
-// Padding bytes are ignored by crypto_kex_recv().
-void crypto_kex_send(crypto_kex_ctx *ctx,
-                     uint8_t *message, size_t message_size);
-int  crypto_kex_recv(crypto_kex_ctx *ctx,
+// Padding bytes are ignored by crypto_kex_read().
+int  crypto_kex_read(crypto_kex_ctx *ctx,
                      const uint8_t *message, size_t message_size);
+void crypto_kex_write(crypto_kex_ctx *ctx,
+                      uint8_t *message, size_t message_size);
 
 // Advanced send & receive functions (with payload)
 // Maximum message size is 96 bytes, plus the size of the payload.
-void crypto_kex_send_p(crypto_kex_ctx *ctx,
-                       uint8_t       *message, size_t message_size,
-                       const uint8_t *payload, size_t payload_size);
-int  crypto_kex_recv_p(crypto_kex_ctx *ctx,
+int  crypto_kex_read_p(crypto_kex_ctx *ctx,
                        uint8_t       *payload, size_t payload_size,
                        const uint8_t *message, size_t message_size);
+void crypto_kex_write_p(crypto_kex_ctx *ctx,
+                        uint8_t       *message, size_t message_size,
+                        const uint8_t *payload, size_t payload_size);
 
 // Adds a prelude to the transcript hash.
 // Call once, just after crypto_kex_*_init().
@@ -59,8 +59,8 @@ void crypto_kex_final(crypto_kex_ctx *ctx,
 
 // Next action to perform.
 //
-// CRYPTO_KEX_SEND        call crypto_kex_send()
-// CRYPTO_KEX_RECV        call crypto_kex_recv()
+// CRYPTO_KEX_READ        call crypto_kex_read()
+// CRYPTO_KEX_WRITE       call crypto_kex_write()
 // CRYPTO_KEX_REMOTE_KEY  call crypto_kex_remote_key()
 // CRYPTO_KEX_FINAL       call crypto_kex_final()
 // CRYPTO_KEX_NONE        The context has been wiped, don't call anything.

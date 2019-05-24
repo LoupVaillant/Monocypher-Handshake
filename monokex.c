@@ -150,28 +150,28 @@ static void kex_locals(crypto_kex_ctx *ctx,
 //////////////////////
 /// Send & receive ///
 //////////////////////
-void crypto_kex_send(crypto_kex_ctx *ctx,
-                     u8 *message, size_t message_size)
+void crypto_kex_write(crypto_kex_ctx *ctx,
+                      u8 *message, size_t message_size)
 {
-    crypto_kex_send_p(ctx, message, message_size, 0, 0);
+    crypto_kex_write_p(ctx, message, message_size, 0, 0);
 }
 
-int crypto_kex_recv(crypto_kex_ctx *ctx,
+int crypto_kex_read(crypto_kex_ctx *ctx,
                     const u8 *message, size_t message_size)
 {
-    return crypto_kex_recv_p(ctx, 0, 0, message, message_size);
+    return crypto_kex_read_p(ctx, 0, 0, message, message_size);
 }
 
 #define SKIP(i)   m += (i); m_size -= (i)
 #define ABSORB(i) kex_mix_hash(ctx, m, i); SKIP(i)
 
-void crypto_kex_send_p(crypto_kex_ctx *ctx,
-                       u8       *m, size_t m_size,
-                       const u8 *p, size_t p_size)
+void crypto_kex_write_p(crypto_kex_ctx *ctx,
+                        u8       *m, size_t m_size,
+                        const u8 *p, size_t p_size)
 {
     // Fail if we should not send (the failure is alas delayed)
     size_t min_size;
-    if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_SEND ||
+    if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_WRITE ||
         m_size < min_size + p_size) {
         WIPE_CTX(ctx);
         return;
@@ -210,13 +210,13 @@ void crypto_kex_send_p(crypto_kex_ctx *ctx,
     FOR (i, 0, m_size) { m[i] = 0; }
 }
 
-int crypto_kex_recv_p(crypto_kex_ctx *ctx,
+int crypto_kex_read_p(crypto_kex_ctx *ctx,
                       u8       *p, size_t p_size,
                       const u8 *m, size_t m_size)
 {
     // Do nothing & fail if we should not receive
     size_t min_size;
-    if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_RECV ||
+    if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_READ ||
         m_size < min_size + p_size) {
         WIPE_CTX(ctx);
         return -1;
@@ -314,8 +314,8 @@ crypto_kex_action crypto_kex_next_action(const crypto_kex_ctx *ctx,
     return !(ctx->flags & IS_OK)    ? CRYPTO_KEX_NONE
         :  should_get_remote        ? CRYPTO_KEX_REMOTE_KEY
         :  ctx->messages[0] == 0    ? CRYPTO_KEX_FINAL
-        :  ctx->flags & SHOULD_SEND ? CRYPTO_KEX_SEND
-        :                             CRYPTO_KEX_RECV;
+        :  ctx->flags & SHOULD_SEND ? CRYPTO_KEX_WRITE
+        :                             CRYPTO_KEX_READ;
 }
 
 ///////////

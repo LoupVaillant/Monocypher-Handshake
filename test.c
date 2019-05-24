@@ -104,19 +104,19 @@ static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
         crypto_kex_action action = crypto_kex_next_action(&ctx->ctx, &msg_size);
         msg_size += pld_size;
         switch (action) {
-        case CRYPTO_KEX_SEND: {
-            const u8 *pld = i->payloads[ctx->msg_num];
-            crypto_kex_send_p(&ctx->ctx, msg, msg_size, pld, pld_size);
+        case CRYPTO_KEX_READ: {
+            u8 *pld = ctx->payloads[ctx->msg_num];
+            check(!crypto_kex_read_p(&ctx->ctx, pld, pld_size, msg, msg_size),
+                  "corrupt message");
             memcpy(ctx->messages[ctx->msg_num], msg, msg_size);
-            memcpy(ctx->payloads[ctx->msg_num], pld, pld_size);
             ctx->msg_num++;
             break;
         }
-        case CRYPTO_KEX_RECV: {
-            u8 *pld = ctx->payloads[ctx->msg_num];
-            check(!crypto_kex_recv_p(&ctx->ctx, pld, pld_size, msg, msg_size),
-                  "corrupt message");
+        case CRYPTO_KEX_WRITE: {
+            const u8 *pld = i->payloads[ctx->msg_num];
+            crypto_kex_write_p(&ctx->ctx, msg, msg_size, pld, pld_size);
             memcpy(ctx->messages[ctx->msg_num], msg, msg_size);
+            memcpy(ctx->payloads[ctx->msg_num], pld, pld_size);
             ctx->msg_num++;
             break;
         }
@@ -130,7 +130,7 @@ static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
             break;
         }
     } while (crypto_kex_next_action(&ctx->ctx, 0) != CRYPTO_KEX_NONE &&
-             crypto_kex_next_action(&ctx->ctx, 0) != CRYPTO_KEX_RECV);
+             crypto_kex_next_action(&ctx->ctx, 0) != CRYPTO_KEX_READ);
 }
 
 static void session(handshake_ctx *client_ctx,
