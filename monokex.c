@@ -245,21 +245,14 @@ int crypto_kex_read_p(crypto_kex_ctx *ctx,
     // Verify (possibly with payload)
     if (ctx->flags & HAS_KEY) {
         int error;
-        if (p != 0) { error = kex_decrypt(ctx, p, m, p_size); SKIP(p_size); }
-        else        { error = kex_verify(ctx, m);                           }
+        if (p != 0) { error = kex_decrypt(ctx, p, m, p_size); }
+        else        { error = kex_verify(ctx, m);             }
         if (error) { return -1; }
-        SKIP(16); // final authentication tag
     } else {
         if (p != 0) {
             copy(p, m, p_size);
-            ABSORB(p_size);
+            kex_mix_hash(ctx, m, p_size);
         }
-    }
-
-    // Check for size overflow (only possible if we misuse the API)
-    if (m_size >> ((sizeof(m_size) * 8) - 1)) {
-        WIPE_CTX(ctx);
-        return -1;
     }
     return 0;
 }
