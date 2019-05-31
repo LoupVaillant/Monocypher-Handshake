@@ -350,6 +350,40 @@ void crypto_kex_xk1_server_init(crypto_kex_ctx *ctx,
     ctx->messages[3] = 0;
 }
 
+///////////
+/// NK1 ///
+///////////
+void crypto_kex_nk1_client_init(crypto_kex_ctx *ctx,
+                                uint8_t         random_seed[32],
+                                const uint8_t   server_pk  [32])
+{
+    kex_init    (ctx, pid_xk1);
+    kex_seed    (ctx, random_seed);
+    kex_mix_hash(ctx, server_pk, 32);
+    copy(ctx->remote_pk, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (ES << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_nk1_server_init(crypto_kex_ctx *ctx,
+                                uint8_t         random_seed[32],
+                                const uint8_t   server_sk  [32],
+                                const uint8_t   server_pk  [32])
+{
+    kex_init    (ctx, pid_xk1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    kex_mix_hash(ctx, ctx->local_pk, 32);
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);;
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+
 /////////
 /// X ///
 /////////

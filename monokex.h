@@ -111,6 +111,31 @@ void crypto_kex_xk1_server_init(crypto_kex_ctx *ctx,
                                 const uint8_t   server_sk  [32],
                                 const uint8_t   server_pk  [32]);
 
+///////////
+/// NK1 ///
+///////////
+
+// Initialises a handshake context for the client.
+// Actions happen in the following order:
+//
+// - write (32 bytes)
+// - read  (48 bytes)
+// - final
+void crypto_kex_nk1_client_init(crypto_kex_ctx *ctx,
+                                uint8_t         random_seed[32],
+                                const uint8_t   server_pk  [32]);
+
+// Initialises a handshake context for the server.
+// Actions happen in the following order:
+//
+// - read  (32 bytes)
+// - write (48 bytes)
+// - final
+void crypto_kex_nk1_server_init(crypto_kex_ctx *ctx,
+                                uint8_t         random_seed[32],
+                                const uint8_t   server_sk  [32],
+                                const uint8_t   server_pk  [32]);
+
 /////////
 /// X ///
 /////////

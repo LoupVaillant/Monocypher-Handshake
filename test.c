@@ -176,10 +176,14 @@ static void compare(handshake_ctx *client_ctx,
           "Different session keys");
     check_equal(client_ctx->extra_key, server_ctx->extra_key, 32,
           "Different extra keys");
-    check_equal(server_ctx->remote_key, client_key, 32,
-          "Server has wrong client key");
-    check_equal(client_ctx->remote_key, server_key, 32,
-          "Client has wrong server key");
+    if (client_key) {
+        check_equal(server_ctx->remote_key, client_key, 32,
+                    "Server has wrong client key");
+    }
+    if (server_key) {
+        check_equal(client_ctx->remote_key, server_key, 32,
+                    "Client has wrong server key");
+    }
     check(client_ctx->msg_num == server_ctx->msg_num,
           "Message numbers don't match");
     FOR (i, 0, 4) {
@@ -212,6 +216,26 @@ static void xk1_session(unsigned nb)
     compare(&client_ctx, &server_ctx, client_pk, server_pk);
 }
 
+static void nk1_session(unsigned nb)
+{
+    inputs i;
+    fill_inputs(&i, nb);
+    u8 server_pk  [32];  crypto_key_exchange_public_key(server_pk, i.server_sk);
+    u8 client_seed[32];  memcpy(client_seed, i.client_seed, 32);
+    u8 server_seed[32];  memcpy(server_seed, i.server_seed, 32);
+
+    handshake_ctx client_ctx;
+    crypto_kex_nk1_client_init(&client_ctx.ctx, client_seed, server_pk);
+    memcpy(client_ctx.remote_key, server_pk, 32);
+
+    handshake_ctx server_ctx;
+    crypto_kex_nk1_server_init(&server_ctx.ctx, server_seed,
+                               i.server_sk, server_pk);
+
+    session(&client_ctx, &server_ctx, &i);
+    compare(&client_ctx, &server_ctx, 0, server_pk);
+}
+
 void x_session(unsigned nb)
 {
     inputs i;
@@ -235,6 +259,7 @@ void x_session(unsigned nb)
 int main()
 {
     FOR(i, 0, 32) { xk1_session(i); } printf("xk1 session OK\n");
+    FOR(i, 0, 32) { nk1_session(i); } printf("nk1 session OK\n");
     FOR(i, 0, 32) { x_session(i);   } printf("x   session OK\n");
     return 0;
 }
