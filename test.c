@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <monocypher.h>
+#include "monocypher.h"
 #include "monokex.h"
 #include "utils.h"
 
