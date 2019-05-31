@@ -119,6 +119,7 @@ static void kex_next_message(crypto_kex_ctx *ctx)
     FOR (i, 0, 3) {
         ctx->messages[i] = ctx->messages[i+1];
     }
+    ctx->messages[3] = 0;
 }
 
 //////////////////////
@@ -350,14 +351,55 @@ void crypto_kex_xk1_server_init(crypto_kex_ctx *ctx,
     ctx->messages[3] = 0;
 }
 
+////////////
+/// X1K1 ///
+////////////
+static const u8 pid_x1k1[32] = "Monokex X1K1";
+
+void crypto_kex_x1k1_client_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        client_sk  [32],
+                                 const u8        client_pk  [32],
+                                 const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_x1k1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    kex_mix_hash(ctx, server_pk, 32);
+    copy(ctx->remote_pk, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (ES << 6);
+    ctx->messages[2] = S;
+    ctx->messages[3] = SE;
+}
+
+void crypto_kex_x1k1_server_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        server_sk  [32],
+                                 const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_x1k1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    kex_mix_hash(ctx, ctx->local_pk, 32);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);;
+    ctx->messages[2] = S;
+    ctx->messages[3] = ES;
+}
+
 ///////////
 /// NK1 ///
 ///////////
+static const u8 pid_nk1[32] = "Monokex NK1";
+
 void crypto_kex_nk1_client_init(crypto_kex_ctx *ctx,
                                 uint8_t         random_seed[32],
                                 const uint8_t   server_pk  [32])
 {
-    kex_init    (ctx, pid_xk1);
+    kex_init    (ctx, pid_nk1);
     kex_seed    (ctx, random_seed);
     kex_mix_hash(ctx, server_pk, 32);
     copy(ctx->remote_pk, server_pk, 32);
@@ -373,7 +415,7 @@ void crypto_kex_nk1_server_init(crypto_kex_ctx *ctx,
                                 const uint8_t   server_sk  [32],
                                 const uint8_t   server_pk  [32])
 {
-    kex_init    (ctx, pid_xk1);
+    kex_init    (ctx, pid_nk1);
     kex_seed    (ctx, random_seed);
     kex_locals  (ctx, server_sk, server_pk);
     kex_mix_hash(ctx, ctx->local_pk, 32);
