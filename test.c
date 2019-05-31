@@ -98,8 +98,9 @@ typedef struct {
 static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
 {
     do {
-        int    has_pld  = i->has_payload[ctx->msg_num];
-        u8     pld_size = has_pld ? i->payload_size[ctx->msg_num] : 0;
+        u8 pld_size = ctx->msg_num < 4 && i->has_payload[ctx->msg_num]
+                    ? i->payload_size[ctx->msg_num]
+                    : 0;
         size_t msg_size;
         crypto_kex_action action = crypto_kex_next_action(&ctx->ctx, &msg_size);
         msg_size += pld_size;
