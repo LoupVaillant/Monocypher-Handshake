@@ -239,6 +239,28 @@ static void x1k1_session(unsigned nb)
     compare(&client_ctx, &server_ctx, client_pk, server_pk);
 }
 
+static void ix_session(unsigned nb)
+{
+    inputs i;
+    fill_inputs(&i, nb);
+    u8 client_pk  [32];  crypto_key_exchange_public_key(client_pk, i.client_sk);
+    u8 server_pk  [32];  crypto_key_exchange_public_key(server_pk, i.server_sk);
+    u8 client_seed[32];  memcpy(client_seed, i.client_seed, 32);
+    u8 server_seed[32];  memcpy(server_seed, i.server_seed, 32);
+
+    handshake_ctx client_ctx;
+    crypto_kex_ix_client_init(&client_ctx.ctx, client_seed,
+                              i.client_sk, client_pk);
+    memcpy(client_ctx.remote_key, server_pk, 32);
+
+    handshake_ctx server_ctx;
+    crypto_kex_ix_server_init(&server_ctx.ctx, server_seed,
+                              i.server_sk, server_pk);
+
+    session(&client_ctx, &server_ctx, &i);
+    compare(&client_ctx, &server_ctx, client_pk, server_pk);
+}
+
 static void nk1_session(unsigned nb)
 {
     inputs i;
@@ -283,6 +305,7 @@ int main()
 {
     FOR(i, 0, 32) { xk1_session (i); } printf("xk1  session OK\n");
     FOR(i, 0, 32) { x1k1_session(i); } printf("x1k1 session OK\n");
+    FOR(i, 0, 32) { ix_session  (i); } printf("ix   session OK\n");
     FOR(i, 0, 32) { nk1_session (i); } printf("nk1  session OK\n");
     FOR(i, 0, 32) { x_session   (i); } printf("x    session OK\n");
     return 0;

@@ -346,7 +346,7 @@ void crypto_kex_xk1_server_init(crypto_kex_ctx *ctx,
     kex_mix_hash(ctx, ctx->local_pk, 32);
     ctx->flags |= GETS_REMOTE;
     ctx->messages[0] = E;
-    ctx->messages[1] = E + (EE << 3) + (SE << 6);;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);
     ctx->messages[2] = S + (ES << 3);
     ctx->messages[3] = 0;
 }
@@ -385,9 +385,44 @@ void crypto_kex_x1k1_server_init(crypto_kex_ctx *ctx,
     kex_mix_hash(ctx, ctx->local_pk, 32);
     ctx->flags |= GETS_REMOTE;
     ctx->messages[0] = E;
-    ctx->messages[1] = E + (EE << 3) + (SE << 6);;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);
     ctx->messages[2] = S;
     ctx->messages[3] = ES;
+}
+
+///////////
+/// XK1 ///
+///////////
+static const u8 pid_ix[32] = "Monokex IX";
+
+void crypto_kex_ix_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_sk  [32],
+                               const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_ix);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (SE << 6) + (S << 9) + (ES << 12);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_ix_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_ix);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (ES << 6) + (S << 9) + (SE << 12);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
 }
 
 ///////////
@@ -420,7 +455,7 @@ void crypto_kex_nk1_server_init(crypto_kex_ctx *ctx,
     kex_locals  (ctx, server_sk, server_pk);
     kex_mix_hash(ctx, ctx->local_pk, 32);
     ctx->messages[0] = E;
-    ctx->messages[1] = E + (EE << 3) + (SE << 6);;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);
     ctx->messages[2] = 0;
     ctx->messages[3] = 0;
 }
