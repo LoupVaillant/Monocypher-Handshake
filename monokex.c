@@ -41,19 +41,33 @@ static void encrypt(u8 *out, const u8 *in, size_t size, const u8 key[32])
     WIPE_CTX(&ctx);
 }
 
+static void mix_hash(u8 after[64], const u8 before[64],
+                     const u8 *input, size_t input_size)
+{
+    crypto_blake2b_ctx ctx;
+    crypto_blake2b_init  (&ctx);
+    crypto_blake2b_update(&ctx, before, 64);
+    crypto_blake2b_update(&ctx, input, input_size);
+    crypto_blake2b_final (&ctx, after);
+}
+
 /////////////////////
 /// State machine ///
 /////////////////////
 
 #define kex_mix_hash crypto_kex_add_prelude // it's the same thing
 
-void kex_mix_hash(crypto_kex_ctx *ctx, const u8 *buf, size_t buf_size)
+void kex_mix_hash(crypto_kex_ctx *ctx, const u8 *input, size_t input_size)
 {
-    crypto_blake2b_ctx blake_ctx;
-    crypto_blake2b_init  (&blake_ctx);
-    crypto_blake2b_update(&blake_ctx, ctx->hash, 32);
-    crypto_blake2b_update(&blake_ctx, buf, buf_size);
-    crypto_blake2b_final (&blake_ctx, ctx->hash);
+    mix_hash(ctx->hash, ctx->hash, input, input_size);
+}
+
+void kex_extra_hash(crypto_kex_ctx *ctx, u8 *out)
+{
+    u8 zero[1] = {0};
+    u8 one [1] = {1};
+    mix_hash(ctx->hash, ctx->hash, zero, 1); // next chaining hash
+    mix_hash(out      , ctx->hash, one , 1); // extra hash
 }
 
 static void kex_update_key(crypto_kex_ctx *ctx,
@@ -69,33 +83,41 @@ static void kex_update_key(crypto_kex_ctx *ctx,
 
 static void kex_auth(crypto_kex_ctx *ctx, u8 tag[16])
 {
-    copy(tag, ctx->hash + 32, 16);
-    kex_mix_hash(ctx, 0, 0);
+    u8 tmp[64];
+    kex_extra_hash(ctx, tmp);
+    copy(tag, tmp, 16);
+    WIPE_BUFFER(tmp);
 }
 
 static int kex_verify(crypto_kex_ctx *ctx, const u8 tag[16])
 {
-    if (crypto_verify16(tag, ctx->hash + 32)) {
+    u8 real_tag[64]; // actually 16 useful bytes
+    kex_extra_hash(ctx, real_tag);
+    if (crypto_verify16(tag, real_tag)) {
         WIPE_CTX(ctx);
+        WIPE_BUFFER(real_tag);
         return -1;
     }
-    kex_mix_hash(ctx, 0, 0);
+    WIPE_BUFFER(real_tag);
     return 0;
 }
 
 static void kex_encrypt(crypto_kex_ctx *ctx,
                         u8 *msg, const u8 *src, size_t size)
 {
-    encrypt(msg, src, size, ctx->hash + 32);
+    u8 key[64]; // actually 32 useful bytes
+    kex_extra_hash(ctx, key);
+    encrypt(msg, src, size, key);
     kex_mix_hash(ctx, msg, size);
     kex_auth(ctx, msg + size);
+    WIPE_BUFFER(key);
 }
 
 static int kex_decrypt(crypto_kex_ctx *ctx,
                        u8 *dest, const u8 *msg, size_t size)
 {
-    u8 key[32];
-    copy(key, ctx->hash + 32, 32);
+    u8 key[64]; // actually 32 useful bytes
+    kex_extra_hash(ctx, key);
     kex_mix_hash(ctx, msg, size);
     if (kex_verify(ctx, msg + size)) {
         WIPE_BUFFER(key);
