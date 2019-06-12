@@ -168,18 +168,16 @@ static void kex_init(crypto_kex_ctx *ctx, const u8 pid[32])
 
 static void kex_seed(crypto_kex_ctx *ctx, u8 random_seed[32])
 {
-    copy(ctx->local_ske, random_seed, 32);
+    copy(ctx->e, random_seed, 32);
     crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
-    crypto_x25519_public_key(ctx->local_pke, ctx->local_ske);
+    crypto_x25519_public_key(ctx->ep, ctx->e);
 }
 
-static void kex_locals(crypto_kex_ctx *ctx,
-                       const u8        local_sk[32],
-                       const u8        local_pk[32])
+static void kex_locals(crypto_kex_ctx *ctx, const u8 s[32], const u8 sp[32])
 {
-    if (local_pk == 0) crypto_x25519_public_key(ctx->local_pk, local_sk);
-    else               copy                    (ctx->local_pk, local_pk, 32);
-    copy(ctx->local_sk, local_sk, 32);
+    if (sp == 0) crypto_x25519_public_key(ctx->sp, s);
+    else         copy                    (ctx->sp, sp, 32);
+    copy(ctx->s, s, 32);
 }
 
 //////////////////////
@@ -214,12 +212,12 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
     // Send core message
     while (ctx->messages[0] != 0) { // message not yet empty
         switch (kex_next_token(ctx)) {
-        case E : kex_write(ctx, &m, ctx->local_pke, 32);               break;
-        case S : kex_write(ctx, &m, ctx->local_pk , 32);               break;
-        case EE: kex_update_key(ctx, ctx->local_ske, ctx->remote_pke); break;
-        case ES: kex_update_key(ctx, ctx->local_ske, ctx->remote_pk ); break;
-        case SE: kex_update_key(ctx, ctx->local_sk , ctx->remote_pke); break;
-        case SS: kex_update_key(ctx, ctx->local_sk , ctx->remote_pk ); break;
+        case E : kex_write(ctx, &m, ctx->ep, 32);      break;
+        case S : kex_write(ctx, &m, ctx->sp, 32);      break;
+        case EE: kex_update_key(ctx, ctx->e, ctx->er); break;
+        case ES: kex_update_key(ctx, ctx->e, ctx->sr); break;
+        case SE: kex_update_key(ctx, ctx->s, ctx->er); break;
+        case SS: kex_update_key(ctx, ctx->s, ctx->sr); break;
         default:; // never happens
         }
     }
@@ -258,13 +256,13 @@ int crypto_kex_read_p(crypto_kex_ctx *ctx,
     // receive core message
     while (ctx->messages[0] != 0) { // message not yet empty
         switch (kex_next_token(ctx)) {
-        case E : kex_read(ctx, ctx->remote_pke, &m, 32);               break;
-        case S:  if (kex_read(ctx, ctx->remote_pk, &m, 32)) { return -1; }
-                 ctx->flags |= HAS_REMOTE;                             break;
-        case EE: kex_update_key(ctx, ctx->local_ske, ctx->remote_pke); break;
-        case ES: kex_update_key(ctx, ctx->local_ske, ctx->remote_pk ); break;
-        case SE: kex_update_key(ctx, ctx->local_sk , ctx->remote_pke); break;
-        case SS: kex_update_key(ctx, ctx->local_sk , ctx->remote_pk ); break;
+        case E : kex_read(ctx, ctx->er, &m, 32);       break;
+        case S:  if (kex_read(ctx, ctx->sr, &m, 32)) { return -1; }
+                 ctx->flags |= HAS_REMOTE;             break;
+        case EE: kex_update_key(ctx, ctx->e, ctx->er); break;
+        case ES: kex_update_key(ctx, ctx->e, ctx->sr); break;
+        case SE: kex_update_key(ctx, ctx->s, ctx->er); break;
+        case SS: kex_update_key(ctx, ctx->s, ctx->sr); break;
         default:; // never happens
         }
     }
@@ -294,12 +292,11 @@ void crypto_kex_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
         WIPE_CTX(ctx);
         return;
     }
-    copy(key, ctx->remote_pk, 32);
+    copy(key, ctx->sr, 32);
     ctx->flags &= ~GETS_REMOTE;
 }
 
-void crypto_kex_final(crypto_kex_ctx *ctx,
-                                u8 key[32], u8 extra[32])
+void crypto_kex_final(crypto_kex_ctx *ctx, u8 key[32], u8 extra[32])
 {
     if (crypto_kex_next_action(ctx, 0) == CRYPTO_KEX_FINAL) {
         copy(key, ctx->hash, 32);
@@ -354,7 +351,7 @@ void crypto_kex_xk1_client_init(crypto_kex_ctx *ctx,
     kex_seed    (ctx, random_seed);
     kex_locals  (ctx, client_sk, client_pk);
     kex_mix_hash(ctx, server_pk, 32);
-    copy(ctx->remote_pk, server_pk, 32);
+    copy(ctx->sr, server_pk, 32);
     ctx->flags |= HAS_REMOTE | SHOULD_SEND;
     ctx->messages[0] = E;
     ctx->messages[1] = E + (EE << 3) + (ES << 6);
@@ -370,7 +367,7 @@ void crypto_kex_xk1_server_init(crypto_kex_ctx *ctx,
     kex_init    (ctx, pid_xk1);
     kex_seed    (ctx, random_seed);
     kex_locals  (ctx, server_sk, server_pk);
-    kex_mix_hash(ctx, ctx->local_pk, 32);
+    kex_mix_hash(ctx, ctx->sp, 32);
     ctx->flags |= GETS_REMOTE;
     ctx->messages[0] = E;
     ctx->messages[1] = E + (EE << 3) + (SE << 6);
@@ -393,7 +390,7 @@ void crypto_kex_x1k1_client_init(crypto_kex_ctx *ctx,
     kex_seed    (ctx, random_seed);
     kex_locals  (ctx, client_sk, client_pk);
     kex_mix_hash(ctx, server_pk, 32);
-    copy(ctx->remote_pk, server_pk, 32);
+    copy(ctx->sr, server_pk, 32);
     ctx->flags |= HAS_REMOTE | SHOULD_SEND;
     ctx->messages[0] = E;
     ctx->messages[1] = E + (EE << 3) + (ES << 6);
@@ -409,7 +406,7 @@ void crypto_kex_x1k1_server_init(crypto_kex_ctx *ctx,
     kex_init    (ctx, pid_x1k1);
     kex_seed    (ctx, random_seed);
     kex_locals  (ctx, server_sk, server_pk);
-    kex_mix_hash(ctx, ctx->local_pk, 32);
+    kex_mix_hash(ctx, ctx->sp, 32);
     ctx->flags |= GETS_REMOTE;
     ctx->messages[0] = E;
     ctx->messages[1] = E + (EE << 3) + (SE << 6);
@@ -464,7 +461,7 @@ void crypto_kex_nk1_client_init(crypto_kex_ctx *ctx,
     kex_init    (ctx, pid_nk1);
     kex_seed    (ctx, random_seed);
     kex_mix_hash(ctx, server_pk, 32);
-    copy(ctx->remote_pk, server_pk, 32);
+    copy(ctx->sr, server_pk, 32);
     ctx->flags |= HAS_REMOTE | SHOULD_SEND;
     ctx->messages[0] = E;
     ctx->messages[1] = E + (EE << 3) + (ES << 6);
@@ -480,7 +477,7 @@ void crypto_kex_nk1_server_init(crypto_kex_ctx *ctx,
     kex_init    (ctx, pid_nk1);
     kex_seed    (ctx, random_seed);
     kex_locals  (ctx, server_sk, server_pk);
-    kex_mix_hash(ctx, ctx->local_pk, 32);
+    kex_mix_hash(ctx, ctx->sp, 32);
     ctx->messages[0] = E;
     ctx->messages[1] = E + (EE << 3) + (SE << 6);
     ctx->messages[2] = 0;
@@ -503,7 +500,7 @@ void crypto_kex_x_client_init(crypto_kex_ctx *ctx,
     kex_seed    (ctx, random_seed);
     kex_locals  (ctx, client_sk, client_pk);
     kex_mix_hash(ctx, server_pk, 32);
-    copy(ctx->remote_pk, server_pk, 32);
+    copy(ctx->sr, server_pk, 32);
     ctx->flags |= HAS_REMOTE | SHOULD_SEND;
     ctx->messages[0] = E + (ES << 3) + (S << 6) + (SS << 9);
     ctx->messages[1] = 0;
@@ -517,7 +514,7 @@ void crypto_kex_x_server_init(crypto_kex_ctx *ctx,
 {
     kex_init    (ctx, pid_x);
     kex_locals  (ctx, server_sk, server_pk);
-    kex_mix_hash(ctx, ctx->local_pk, 32);
+    kex_mix_hash(ctx, ctx->sp, 32);
     ctx->flags |= GETS_REMOTE;
     ctx->messages[0] = E + (SE << 3) + (S << 6) + (SS << 9);
     ctx->messages[1] = 0;
