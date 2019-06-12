@@ -185,8 +185,7 @@ int crypto_kex_read(crypto_kex_ctx *ctx,
     return crypto_kex_read_p(ctx, 0, 0, message, message_size);
 }
 
-#define SKIP(i)   m += (i); m_size -= (i)
-#define ABSORB(i) kex_mix_hash(ctx, m, i); SKIP(i)
+#define ABSORB(i) kex_mix_hash(ctx, m, i);  m += (i);
 
 void crypto_kex_write_p(crypto_kex_ctx *ctx,
                         u8       *m, size_t m_size,
@@ -207,7 +206,7 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
         switch (kex_next_token(ctx)) {
         case E : copy(m, ctx->local_pke, 32);             ABSORB(32);  break;
         case S : copy(m, ctx->local_pk , 32);             ABSORB(32);  break;
-        case Sk: kex_encrypt(ctx, m, ctx->local_pk, 32);  SKIP(48);    break;
+        case Sk: kex_encrypt(ctx, m, ctx->local_pk, 32);  m += 48;     break;
         case EE: kex_update_key(ctx, ctx->local_ske, ctx->remote_pke); break;
         case ES: kex_update_key(ctx, ctx->local_ske, ctx->remote_pk ); break;
         case SE: kex_update_key(ctx, ctx->local_sk , ctx->remote_pke); break;
@@ -219,9 +218,9 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
 
     // Authentictate (possibly with payload)
     if (ctx->flags & HAS_KEY) {
-        if (p != 0) { kex_encrypt(ctx, m, p, p_size); SKIP(p_size); }
-        else        { kex_auth(ctx, m);                             }
-        SKIP(16); // final authentication tag
+        if (p != 0) { kex_encrypt(ctx, m, p, p_size); m += p_size; }
+        else        { kex_auth(ctx, m);                            }
+        m += 16; // final authentication tag
     } else {
         if (p != 0) {
             copy(m, p, p_size);
@@ -230,7 +229,9 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
     }
 
     // Pad
-    FOR (i, 0, m_size) { m[i] = 0; }
+    FOR (i, 0, m_size - min_size - p_size) {
+        m[i] = 0;
+    }
 }
 
 int crypto_kex_read_p(crypto_kex_ctx *ctx,
@@ -254,7 +255,7 @@ int crypto_kex_read_p(crypto_kex_ctx *ctx,
         case S : copy(ctx->remote_pk , m, 32);  ABSORB(32);
                  ctx->flags |= HAS_REMOTE;                             break;
         case Sk: if (kex_decrypt(ctx, ctx->remote_pk, m, 32)) { return -1; }
-                 SKIP(48);
+                 m += 48;
                  ctx->flags |= HAS_REMOTE;                             break;
         case EE: kex_update_key(ctx, ctx->local_ske, ctx->remote_pke); break;
         case ES: kex_update_key(ctx, ctx->local_ske, ctx->remote_pk ); break;
