@@ -82,6 +82,7 @@ static void kex_update_key(crypto_kex_ctx *ctx,
 
 static void kex_auth(crypto_kex_ctx *ctx, u8 tag[16])
 {
+    if (!(ctx->flags & HAS_KEY)) { return; }
     u8 tmp[64];
     kex_extra_hash(ctx, tmp);
     copy(tag, tmp, 16);
@@ -90,6 +91,7 @@ static void kex_auth(crypto_kex_ctx *ctx, u8 tag[16])
 
 static int kex_verify(crypto_kex_ctx *ctx, const u8 tag[16])
 {
+    if (!(ctx->flags & HAS_KEY)) { return 0; }
     u8 real_tag[64]; // actually 16 useful bytes
     kex_extra_hash(ctx, real_tag);
     if (crypto_verify16(tag, real_tag)) {
@@ -237,14 +239,8 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
     kex_next_message(ctx);
 
     // Write payload, if any
-    if (p != 0) {
-        kex_write(ctx, &m, p, p_size);
-    }
-    // Authenticate
-    if (ctx->flags & HAS_KEY && p == 0) {
-        kex_auth(ctx, m);
-        m += 16;
-    }
+    if (p != 0) { kex_write(ctx, &m, p, p_size); }
+    else        { kex_auth(ctx, m);  m += 16;    }
 
     // Pad
     FOR (i, 0, m_size - min_size - p_size) {
@@ -270,8 +266,10 @@ int crypto_kex_read_p(crypto_kex_ctx *ctx,
     while (ctx->messages[0] != 0) { // message not yet empty
         switch (kex_next_token(ctx)) {
         case E : kex_read_raw(ctx, ctx->er, &m, 32);   break;
-        case S:  if (kex_read(ctx, ctx->sr, &m, 32)) { return -1; }
-                 ctx->flags |= HAS_REMOTE;             break;
+        case S :
+            if (kex_read(ctx, ctx->sr, &m, 32)) { return -1; }
+            ctx->flags |= HAS_REMOTE;
+            break;
         case EE: kex_update_key(ctx, ctx->e, ctx->er); break;
         case ES: kex_update_key(ctx, ctx->e, ctx->sr); break;
         case SE: kex_update_key(ctx, ctx->s, ctx->er); break;
@@ -282,17 +280,8 @@ int crypto_kex_read_p(crypto_kex_ctx *ctx,
     kex_next_message(ctx);
 
     // Read payload, if any
-    if (p != 0) {
-        if (kex_read(ctx, p, &m, p_size)) {
-            return -1;
-        }
-    }
-    // Verify
-    if (ctx->flags & HAS_KEY && p == 0) {
-        if (kex_verify(ctx, m)) {
-            return -1;
-        }
-    }
+    if (p != 0) { if (kex_read(ctx, p, &m, p_size)) { return -1; } }
+    else        { if (kex_verify(ctx, m)          ) { return -1; } }
     return 0;
 }
 
