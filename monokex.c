@@ -101,42 +101,55 @@ static int kex_verify(crypto_kex_ctx *ctx, const u8 tag[16])
     return 0;
 }
 
+static void kex_write_raw(crypto_kex_ctx *ctx, u8 **msg,
+                          const u8 *src, size_t size)
+{
+    copy(*msg, src, size);
+    kex_mix_hash(ctx, *msg, size);
+    *msg += size;
+}
+
+static void kex_read_raw(crypto_kex_ctx *ctx, u8 *dest,
+                         const u8 **msg, size_t size)
+{
+    kex_mix_hash(ctx, *msg, size);
+    copy(dest, *msg, size);
+    *msg += size;
+}
+
 static void kex_write(crypto_kex_ctx *ctx, u8 **msg, const u8 *src, size_t size)
 {
-    if (ctx->flags & HAS_KEY) {
-        u8 key[64]; // actually 32 useful bytes
-        kex_extra_hash(ctx, key);
-        encrypt(*msg, src, size, key);
-        kex_mix_hash(ctx, *msg, size);
-        kex_auth(ctx, *msg + size);
-        *msg += size + 16;
-        WIPE_BUFFER(key);
-    } else {
-        copy(*msg, src, size);
-        kex_mix_hash(ctx, *msg, size);
-        *msg += size;
+    if (!(ctx->flags & HAS_KEY)) {
+        kex_write_raw(ctx, msg, src, size);
+        return;
     }
+    // we have a key, we encrypt
+    u8 key[64]; // actually 32 useful bytes
+    kex_extra_hash(ctx, key);
+    encrypt(*msg, src, size, key);
+    kex_mix_hash(ctx, *msg, size);
+    kex_auth(ctx, *msg + size);
+    *msg += size + 16;
+    WIPE_BUFFER(key);
 }
 
 static int kex_read(crypto_kex_ctx *ctx, u8 *dest, const u8 **msg, size_t size)
 {
-    if (ctx->flags & HAS_KEY) {
-        u8 key[64]; // actually 32 useful bytes
-        kex_extra_hash(ctx, key);
-        kex_mix_hash(ctx, *msg, size);
-        if (kex_verify(ctx, *msg + size)) {
-            WIPE_BUFFER(key);
-            return -1;
-        }
-        encrypt(dest, *msg, size, key);
-        *msg += size + 16;
-        WIPE_BUFFER(key);
+    if (!(ctx->flags & HAS_KEY)) {
+        kex_read_raw(ctx, dest, msg, size);
         return 0;
     }
-    // else
+    // we have a key, we decrypt
+    u8 key[64]; // actually 32 useful bytes
+    kex_extra_hash(ctx, key);
     kex_mix_hash(ctx, *msg, size);
-    copy(dest, *msg, size);
-    *msg += size;
+    if (kex_verify(ctx, *msg + size)) {
+        WIPE_BUFFER(key);
+        return -1;
+    }
+    encrypt(dest, *msg, size, key);
+    *msg += size + 16;
+    WIPE_BUFFER(key);
     return 0;
 }
 
@@ -212,8 +225,8 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
     // Send core message
     while (ctx->messages[0] != 0) { // message not yet empty
         switch (kex_next_token(ctx)) {
-        case E : kex_write(ctx, &m, ctx->ep, 32);      break;
-        case S : kex_write(ctx, &m, ctx->sp, 32);      break;
+        case E : kex_write_raw (ctx, &m, ctx->ep, 32); break;
+        case S : kex_write     (ctx, &m, ctx->sp, 32); break;
         case EE: kex_update_key(ctx, ctx->e, ctx->er); break;
         case ES: kex_update_key(ctx, ctx->e, ctx->sr); break;
         case SE: kex_update_key(ctx, ctx->s, ctx->er); break;
@@ -256,7 +269,7 @@ int crypto_kex_read_p(crypto_kex_ctx *ctx,
     // receive core message
     while (ctx->messages[0] != 0) { // message not yet empty
         switch (kex_next_token(ctx)) {
-        case E : kex_read(ctx, ctx->er, &m, 32);       break;
+        case E : kex_read_raw(ctx, ctx->er, &m, 32);   break;
         case S:  if (kex_read(ctx, ctx->sr, &m, 32)) { return -1; }
                  ctx->flags |= HAS_REMOTE;             break;
         case EE: kex_update_key(ctx, ctx->e, ctx->er); break;
