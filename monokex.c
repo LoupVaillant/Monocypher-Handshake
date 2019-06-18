@@ -173,9 +173,8 @@ static void kex_next_message(crypto_kex_ctx *ctx)
 //////////////////////
 static void kex_init(crypto_kex_ctx *ctx, const u8 pid[32])
 {
-    WIPE_CTX(ctx);
-    copy(ctx->hash, pid, 32);
-    ctx->flags = IS_OK; // wiping the context sets it to false
+    copy(ctx->hash, pid, 64);
+    ctx->flags = IS_OK;
 }
 
 static void kex_seed(crypto_kex_ctx *ctx, u8 random_seed[32])
@@ -187,8 +186,8 @@ static void kex_seed(crypto_kex_ctx *ctx, u8 random_seed[32])
 
 static void kex_locals(crypto_kex_ctx *ctx, const u8 s[32], const u8 sp[32])
 {
-    if (sp == 0) crypto_x25519_public_key(ctx->sp, s);
-    else         copy                    (ctx->sp, sp, 32);
+    if (sp == 0) { crypto_x25519_public_key(ctx->sp, s);      }
+    else         { copy                    (ctx->sp, sp, 32); }
     copy(ctx->s, s, 32);
 }
 
@@ -340,7 +339,7 @@ crypto_kex_action crypto_kex_next_action(const crypto_kex_ctx *ctx,
 ///////////
 /// XK1 ///
 ///////////
-static const u8 pid_xk1[32] = "Monokex XK1";
+static const u8 pid_xk1[64] = "Monokex XK1";
 
 void crypto_kex_xk1_client_init(crypto_kex_ctx *ctx,
                                 u8              random_seed[32],
@@ -379,7 +378,7 @@ void crypto_kex_xk1_server_init(crypto_kex_ctx *ctx,
 ////////////
 /// X1K1 ///
 ////////////
-static const u8 pid_x1k1[32] = "Monokex X1K1";
+static const u8 pid_x1k1[64] = "Monokex X1K1";
 
 void crypto_kex_x1k1_client_init(crypto_kex_ctx *ctx,
                                  u8              random_seed[32],
@@ -418,7 +417,7 @@ void crypto_kex_x1k1_server_init(crypto_kex_ctx *ctx,
 //////////
 /// IX ///
 //////////
-static const u8 pid_ix[32] = "Monokex IX";
+static const u8 pid_ix[64] = "Monokex IX";
 
 void crypto_kex_ix_client_init(crypto_kex_ctx *ctx,
                                u8              random_seed[32],
@@ -453,7 +452,7 @@ void crypto_kex_ix_server_init(crypto_kex_ctx *ctx,
 ///////////
 /// NK1 ///
 ///////////
-static const u8 pid_nk1[32] = "Monokex NK1";
+static const u8 pid_nk1[64] = "Monokex NK1";
 
 void crypto_kex_nk1_client_init(crypto_kex_ctx *ctx,
                                 uint8_t         random_seed[32],
@@ -489,7 +488,7 @@ void crypto_kex_nk1_server_init(crypto_kex_ctx *ctx,
 /////////
 /// X ///
 /////////
-static const u8 pid_x[32] = "Monokex X";
+static const u8 pid_x[64] = "Monokex X";
 
 void crypto_kex_x_client_init(crypto_kex_ctx *ctx,
                               u8              random_seed[32],
