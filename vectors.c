@@ -23,34 +23,43 @@ void mix_hash2(u8 next[64], u8 extra[64], const u8 pred[64])
     mix_hash(extra, pred, one , 1);
 }
 
+void auth(u8 next[64], u8 *tag, const u8 pred[64])
+{
+    u8 tmp[64];
+    mix_hash2(next, tmp, pred);
+    memcpy(tag, tmp, 16);
+}
+
 void encrypt(u8 next[64], u8 *ct, const u8 pred[64], const u8 *pt, size_t size)
 {
     static const u8 zero[8] = {0};
 
     // encrypt message
     u8 key[64];
-    mix_hash2(next, key, pred); // extract key
+    mix_hash2(next, key, pred);     // extract key
     crypto_chacha_ctx ctx;
     crypto_chacha20_init   (&ctx, key, zero);
     crypto_chacha20_encrypt(&ctx, ct, pt, size);
-
-    // write authentication tag
-    u8 tag[64];
-    mix_hash(next, next, ct, size); // authenticate message
-    mix_hash2(next, tag, next);     // extract authentication tag
-    memcpy(ct + size, tag, 16);
+    mix_hash(next, next, ct, size); // update hash with message
+    auth(next, ct + size, next);    // extract authentication tag
 }
 
-#define APPEND(in, size)                  \
-    if (has_key) {                        \
-        encrypt(hash, m, hash, in, size); \
-        m      += (size) + 16;            \
-        m_size += (size) + 16;            \
-    } else {                              \
-        mix_hash(hash, hash, in, size);   \
-        memcpy(m, in, size);              \
-        m      += (size);                 \
-        m_size += (size);                 \
+#define REC_HASH(out)      memcpy(out, hash, 64)
+#define MIX_HASH(in, size) mix_hash(hash, hash, in, size)
+#define APPEND_RAW(in, size)                   \
+    MIX_HASH(in, size);                        \
+    REC_HASH(out->message_hashes[msg_nb]);     \
+    memcpy(m, in, size);                       \
+    m      += (size);                          \
+    m_size += (size)
+#define APPEND(in, size)                       \
+    if (has_key) {                             \
+        encrypt(hash, m, hash, in, size);      \
+        REC_HASH(out->message_hashes[msg_nb]); \
+        m      += (size) + 16;                 \
+        m_size += (size) + 16;                 \
+    } else {                                   \
+        APPEND_RAW(in, size);                  \
     } do {} while(0)
 
 void generate(out_vectors *out, const in_vectors *in)
@@ -71,15 +80,20 @@ void generate(out_vectors *out, const in_vectors *in)
     if (has_se) { crypto_x25519(out->se, in->css, out->spe); }
     if (has_ss) { crypto_x25519(out->ss, in->css, out->sps); }
 
-    // psrotocol ID
+    // protocol ID
     u8 hash[64]; // current hash
     memcpy(hash, in->protocol_id, 64);
 
+    // pre shared keys
+    if (in->pre_share_cps) { MIX_HASH(out->cps, 32); }
+    if (in->pre_share_sps) { MIX_HASH(out->sps, 32); }
+    REC_HASH(out->initial_hash);
+
     // prelude
-    if (in->prelude_size != -1u) {
-        mix_hash(hash, in->protocol_id, in->prelude, in->prelude_size);
+    if (in->has_prelude) {
+        mix_hash(hash, hash, in->prelude, in->prelude_size);
+        REC_HASH(out->prelude_hash);
     }
-    memcpy(out->prelude_hash, hash, 64);
 
     // pattern
     int msg_nb     = 0;
@@ -93,30 +107,40 @@ void generate(out_vectors *out, const in_vectors *in)
         int    action = 0;
         while (in->pattern[msg_nb][action] != STOP) {
             switch(in->pattern[msg_nb][action]) {
-            case E : APPEND(client_msg ? out->cpe : out->spe, 32);     break;
-            case S : APPEND(client_msg ? out->cps : out->sps, 32);     break;
-            case EE: mix_hash(hash, hash, out->ee, 32);  has_key = 1;  break;
-            case ES: mix_hash(hash, hash, out->es, 32);  has_key = 1;  break;
-            case SE: mix_hash(hash, hash, out->se, 32);  has_key = 1;  break;
-            case SS: mix_hash(hash, hash, out->ss, 32);  has_key = 1;  break;
-            default: fprintf(stderr, "Impossible"); exit(1);
+            case E : APPEND_RAW(client_msg ? out->cpe : out->spe, 32); break;
+            case S : APPEND    (client_msg ? out->cps : out->sps, 32); break;
+            case EE: MIX_HASH(out->ee, 32);  has_key = 1;              break;
+            case ES: MIX_HASH(out->es, 32);  has_key = 1;              break;
+            case SE: MIX_HASH(out->se, 32);  has_key = 1;              break;
+            case SS: MIX_HASH(out->ss, 32);  has_key = 1;              break;
+            default: fprintf(stderr, "Impossible\n"); exit(1);
             }
             action++;
         }
 
         // payload
-        APPEND(in->payloads[msg_nb], in->payload_sizes[msg_nb]);
+        if (in->has_payload[msg_nb]) {
+            APPEND(in->payloads[msg_nb], in->payload_sizes[msg_nb]);
+        } else {
+            // authentication tag (without payload)
+            if (has_key) {
+                auth(hash, m, hash);
+                m_size += 16;
+            }
+        }
 
         // internal hash after message
-        memcpy(out->message_hashes[msg_nb], hash, 64);
+        REC_HASH(out->message_hashes[msg_nb]);
+
+        // actual message size
         out->message_sizes[msg_nb] = m_size;
 
-        client_msg ^= 1; // flip client/server flag
+        client_msg = !client_msg; // flip client/server flag
         msg_nb++;
     }
     out->nb_messages = msg_nb;
 
     // session keys
-    memcpy(out->session_key, out->message_hashes[msg_nb]     , 32);
-    memcpy(out->extra_key  , out->message_hashes[msg_nb] + 32, 32);
+    memcpy(out->session_key, hash   , 32);
+    memcpy(out->extra_key  , hash+32, 32);
 }

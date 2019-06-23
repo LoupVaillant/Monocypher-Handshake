@@ -3,6 +3,7 @@
 #include <string.h>
 #include "monocypher.h"
 #include "monokex.h"
+#include "vectors.h"
 #include "utils.h"
 
 static void check(int condition, const char *error)
@@ -19,44 +20,36 @@ static void check_equal(const u8 *a, const u8 *b, size_t size,
     check(!memcmp(a, b, size), error);
 }
 
-typedef struct {
-    u8 client_sk  [32];
-    u8 server_sk  [32];
-    u8 client_seed[32];
-    u8 server_seed[32];
-    u8 prelude    [32]; int has_prelude;    size_t prelude_size;
-    u8 payloads[4][32]; int has_payload[4]; size_t payload_size[4];
-} inputs;
-
-void fill_inputs(inputs *i, unsigned nb)
+void fill_inputs(in_vectors *i, unsigned nb)
 {
-    p_random(i->client_sk  , 32);
-    p_random(i->server_sk  , 32);
-    p_random(i->client_seed, 32);
-    p_random(i->server_seed, 32);
-    i->prelude_size    = 32;
-    i->payload_size[0] = 32;
-    i->payload_size[1] = 32;
-    i->payload_size[2] = 32;
-    i->payload_size[3] = 32;
+    memset(i, 0, sizeof(*i));
+    p_random(i->cse, 32);
+    p_random(i->sse, 32);
+    p_random(i->css, 32);
+    p_random(i->sss, 32);
+    memset(i->prelude    , 0x33, 32);
+    memset(i->payloads[0], 0x44, 32);
+    memset(i->payloads[1], 0x55, 32);
+    memset(i->payloads[2], 0x66, 32);
+    memset(i->payloads[3], 0x77, 32);
+    i->prelude_size     = 32;
+    i->payload_sizes[0] = 32;
+    i->payload_sizes[1] = 32;
+    i->payload_sizes[2] = 32;
+    i->payload_sizes[3] = 32;
     i->has_prelude     = nb &  1 ? 1 : 0;
     i->has_payload[0]  = nb &  2 ? 1 : 0;
     i->has_payload[1]  = nb &  4 ? 1 : 0;
     i->has_payload[2]  = nb &  8 ? 1 : 0;
     i->has_payload[3]  = nb & 16 ? 1 : 0;
-    if (i->has_prelude   ) { memset(i->prelude    , 0x33, 32); }
-    if (i->has_payload[0]) { memset(i->payloads[0], 0x44, 32); }
-    if (i->has_payload[1]) { memset(i->payloads[1], 0x55, 32); }
-    if (i->has_payload[2]) { memset(i->payloads[2], 0x66, 32); }
-    if (i->has_payload[3]) { memset(i->payloads[3], 0x77, 32); }
 }
 
 /* void print_inputs(const inputs *i) */
 /* { */
-/*     printf("client_sk  : "); print_vector(i->client_sk  , 32); */
-/*     printf("server_sk  : "); print_vector(i->server_sk  , 32); */
-/*     printf("client_seed: "); print_vector(i->client_seed, 32); */
-/*     printf("server_seed: "); print_vector(i->server_seed, 32); */
+/*     printf("client_sk  : "); print_vector(i->css, 32); */
+/*     printf("server_sk  : "); print_vector(i->sss, 32); */
+/*     printf("client_seed: "); print_vector(i->cse, 32); */
+/*     printf("server_seed: "); print_vector(i->sse, 32); */
 /*     if (i->has_prelude) { */
 /*         printf("prelude    : "); */
 /*         print_vector(i->prelude, 32); */
@@ -95,27 +88,48 @@ typedef struct {
 /*     printf("message 4    ");  print_vector(ctx->messages[3], 128); */
 /* } */
 
-static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
+static void step(handshake_ctx *ctx, u8 *msg,
+                 const in_vectors  *i,
+                 const out_vectors *o)
 {
     do {
         u8 pld_size = ctx->msg_num < 4 && i->has_payload[ctx->msg_num]
-                    ? i->payload_size[ctx->msg_num]
+                    ? i->payload_sizes[ctx->msg_num]
                     : 0;
         size_t msg_size;
         crypto_kex_action action = crypto_kex_next_action(&ctx->ctx, &msg_size);
         msg_size += pld_size;
+
         switch (action) {
         case CRYPTO_KEX_READ: {
-            u8 *pld = ctx->payloads[ctx->msg_num];
+            u8 *pld = i->has_payload[ctx->msg_num]
+                    ? ctx->payloads[ctx->msg_num]
+                    : 0;
             check(!crypto_kex_read_p(&ctx->ctx, pld, pld_size, msg, msg_size),
                   "corrupt message");
+            check_equal(ctx->ctx.hash, o->message_hashes[ctx->msg_num], 64,
+                        "Test vectors: wrong intermediate hash");
+            check(msg_size == o->message_sizes[ctx->msg_num],
+                  "Test vectors: wrong message size");
             memcpy(ctx->messages[ctx->msg_num], msg, msg_size);
+            if (pld) {
+                check_equal(i->payloads[ctx->msg_num], pld, pld_size,
+                            "Test vectors: wrong payload");
+            }
             ctx->msg_num++;
             break;
         }
         case CRYPTO_KEX_WRITE: {
-            const u8 *pld = i->payloads[ctx->msg_num];
+            const u8 *pld = i->has_payload[ctx->msg_num]
+                          ? i->payloads[ctx->msg_num]
+                          : 0;
             crypto_kex_write_p(&ctx->ctx, msg, msg_size, pld, pld_size);
+            check_equal(ctx->ctx.hash, o->message_hashes[ctx->msg_num], 64,
+                        "Test vectors: wrong intermediate hash");
+            check(msg_size == o->message_sizes[ctx->msg_num],
+                  "Test vectors: wrong message size");
+            check_equal(o->messages[ctx->msg_num], msg, msg_size,
+                        "Test vectors: wrong message");
             memcpy(ctx->messages[ctx->msg_num], msg, msg_size);
             memcpy(ctx->payloads[ctx->msg_num], pld, pld_size);
             ctx->msg_num++;
@@ -126,6 +140,10 @@ static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
             break;
         case CRYPTO_KEX_FINAL:
             crypto_kex_final(&ctx->ctx, ctx->session_key, ctx->extra_key);
+            check_equal(o->session_key, ctx->session_key, 32,
+                        "Test vectors: wrong session key");
+            check_equal(o->extra_key, ctx->extra_key, 32,
+                        "Test vectors: wrong extra key");
             break;
         default:
             break;
@@ -136,7 +154,8 @@ static void step(handshake_ctx *ctx, u8 *msg, const inputs *i)
 
 static void session(handshake_ctx *client_ctx,
                     handshake_ctx *server_ctx,
-                    const inputs *i)
+                    const in_vectors  *i,
+                    const out_vectors *o)
 {
     client_ctx->msg_num = 0;
     server_ctx->msg_num = 0;
@@ -146,16 +165,26 @@ static void session(handshake_ctx *client_ctx,
         memset(client_ctx->payloads[i], 255,  32);
         memset(server_ctx->payloads[i], 255,  32);
     }
+
+    check_equal(client_ctx->ctx.hash, o->initial_hash, 64,
+                "Vectors: wrong client initial hash");
+    check_equal(server_ctx->ctx.hash, o->initial_hash, 64,
+                "Vectors: wrong server initial hash");
+
     if (i->has_prelude) {
         crypto_kex_add_prelude(&client_ctx->ctx, i->prelude, i->prelude_size);
         crypto_kex_add_prelude(&server_ctx->ctx, i->prelude, i->prelude_size);
+        check_equal(client_ctx->ctx.hash, o->prelude_hash, 64,
+                    "Vectors: wrong client prelude hash");
+        check_equal(server_ctx->ctx.hash, o->prelude_hash, 64,
+                    "Vectors: wrong server prelude hash");
     }
 
-    u8 msg[128]; // maximum size of messages without 32 bytes payloads
+    u8 msg[128]; // maximum size of messages with 32 bytes payloads
     while (crypto_kex_next_action(&client_ctx->ctx, 0) != CRYPTO_KEX_NONE ||
            crypto_kex_next_action(&server_ctx->ctx, 0) != CRYPTO_KEX_NONE) {
-        step(client_ctx, msg, i);
-        step(server_ctx, msg, i);
+        step(client_ctx, msg, i, o);
+        step(server_ctx, msg, i, o);
     }
 
     /* printf("Client handshake\n"); */
@@ -165,7 +194,6 @@ static void session(handshake_ctx *client_ctx,
     /* printf("Server handshake\n"); */
     /* printf("----------------\n"); */
     /* print_handshake(server_ctx); */
-
 }
 
 static void compare(handshake_ctx *client_ctx,
@@ -195,110 +223,159 @@ static void compare(handshake_ctx *client_ctx,
     }
 }
 
+#define PROTOCOL_ID(id)           \
+    static const u8 pid[64] = id; \
+    memcpy(i.protocol_id, pid, 64)
+
+#define STATIC(cs)      \
+    u8 cs##ps[32];      \
+    i.has_##cs##ss = 1; \
+    crypto_key_exchange_public_key(cs##ps, i.cs##ss)
+
+#define EPHEMERAL(cs)   \
+    u8 cs##se[32];      \
+    i.has_##cs##se = 1; \
+    memcpy(cs##se, i.cs##se, 32)
+
+#define PATTERN {           \
+    unsigned msg_num = -1u; \
+    unsigned act_num = 0;
+#define _(a)     i.pattern[msg_num][act_num] = a; act_num++
+#define MESSAGE  msg_num++;                       act_num = 0
+#define END      msg_num++; }                     do {} while (0)
+
 static void xk1_session(unsigned nb)
 {
-    inputs i;
+    in_vectors i;
     fill_inputs(&i, nb);
-    u8 client_pk  [32];  crypto_key_exchange_public_key(client_pk, i.client_sk);
-    u8 server_pk  [32];  crypto_key_exchange_public_key(server_pk, i.server_sk);
-    u8 client_seed[32];  memcpy(client_seed, i.client_seed, 32);
-    u8 server_seed[32];  memcpy(server_seed, i.server_seed, 32);
+    PROTOCOL_ID("Monokex XK1");
+    EPHEMERAL(c);
+    EPHEMERAL(s);
+    STATIC(c);
+    STATIC(s);
+    i.pre_share_sps = 1;
+    PATTERN {
+        MESSAGE; _(E);
+        MESSAGE; _(E); _(EE); _(ES);
+        MESSAGE; _(S); _(SE);
+    } END;
 
-    handshake_ctx client_ctx;
-    crypto_kex_xk1_client_init(&client_ctx.ctx, client_seed,
-                               i.client_sk, client_pk, server_pk);
-    memcpy(client_ctx.remote_key, server_pk, 32);
+    out_vectors o;
+    generate(&o, &i);
 
-    handshake_ctx server_ctx;
-    crypto_kex_xk1_server_init(&server_ctx.ctx, server_seed,
-                               i.server_sk, server_pk);
+    handshake_ctx client_ctx, server_ctx;
+    crypto_kex_xk1_client_init(&client_ctx.ctx, cse, i.css, cps, sps);
+    crypto_kex_xk1_server_init(&server_ctx.ctx, sse, i.sss, sps);
+    memcpy(client_ctx.remote_key, sps, 32);
 
-    session(&client_ctx, &server_ctx, &i);
-    compare(&client_ctx, &server_ctx, client_pk, server_pk);
+    session(&client_ctx, &server_ctx, &i, &o);
+    compare(&client_ctx, &server_ctx, cps, sps);
 }
 
 static void x1k1_session(unsigned nb)
 {
-    inputs i;
+    in_vectors i;
     fill_inputs(&i, nb);
-    u8 client_pk  [32];  crypto_key_exchange_public_key(client_pk, i.client_sk);
-    u8 server_pk  [32];  crypto_key_exchange_public_key(server_pk, i.server_sk);
-    u8 client_seed[32];  memcpy(client_seed, i.client_seed, 32);
-    u8 server_seed[32];  memcpy(server_seed, i.server_seed, 32);
+    PROTOCOL_ID("Monokex X1K1");
+    EPHEMERAL(c);
+    EPHEMERAL(s);
+    STATIC(c);
+    STATIC(s);
+    i.pre_share_sps = 1;
+    PATTERN {
+        MESSAGE; _(E);
+        MESSAGE; _(E); _(EE); _(ES);
+        MESSAGE; _(S);
+        MESSAGE; _(SE);
+    } END;
 
-    handshake_ctx client_ctx;
-    crypto_kex_x1k1_client_init(&client_ctx.ctx, client_seed,
-                                i.client_sk, client_pk, server_pk);
-    memcpy(client_ctx.remote_key, server_pk, 32);
+    out_vectors o;
+    generate(&o, &i);
 
-    handshake_ctx server_ctx;
-    crypto_kex_x1k1_server_init(&server_ctx.ctx, server_seed,
-                                i.server_sk, server_pk);
+    handshake_ctx client_ctx, server_ctx;
+    crypto_kex_x1k1_client_init(&client_ctx.ctx, cse, i.css, cps, sps);
+    crypto_kex_x1k1_server_init(&server_ctx.ctx, sse, i.sss, sps);
+    memcpy(client_ctx.remote_key, sps, 32);
 
-    session(&client_ctx, &server_ctx, &i);
-    compare(&client_ctx, &server_ctx, client_pk, server_pk);
+    session(&client_ctx, &server_ctx, &i, &o);
+    compare(&client_ctx, &server_ctx, cps, sps);
 }
 
 static void ix_session(unsigned nb)
 {
-    inputs i;
+    in_vectors i;
     fill_inputs(&i, nb);
-    u8 client_pk  [32];  crypto_key_exchange_public_key(client_pk, i.client_sk);
-    u8 server_pk  [32];  crypto_key_exchange_public_key(server_pk, i.server_sk);
-    u8 client_seed[32];  memcpy(client_seed, i.client_seed, 32);
-    u8 server_seed[32];  memcpy(server_seed, i.server_seed, 32);
+    PROTOCOL_ID("Monokex IX");
+    EPHEMERAL(c);
+    EPHEMERAL(s);
+    STATIC(c);
+    STATIC(s);
+    PATTERN {
+        MESSAGE; _(E); _(S);
+        MESSAGE; _(E); _(EE); _(SE); _(S); _(ES);
+    } END;
 
-    handshake_ctx client_ctx;
-    crypto_kex_ix_client_init(&client_ctx.ctx, client_seed,
-                              i.client_sk, client_pk);
-    memcpy(client_ctx.remote_key, server_pk, 32);
+    out_vectors o;
+    generate(&o, &i);
 
-    handshake_ctx server_ctx;
-    crypto_kex_ix_server_init(&server_ctx.ctx, server_seed,
-                              i.server_sk, server_pk);
+    handshake_ctx client_ctx, server_ctx;
+    crypto_kex_ix_client_init(&client_ctx.ctx, cse, i.css, cps);
+    crypto_kex_ix_server_init(&server_ctx.ctx, sse, i.sss, sps);
+    memcpy(client_ctx.remote_key, sps, 32);
 
-    session(&client_ctx, &server_ctx, &i);
-    compare(&client_ctx, &server_ctx, client_pk, server_pk);
+    session(&client_ctx, &server_ctx, &i, &o);
+    compare(&client_ctx, &server_ctx, cps, sps);
 }
 
 static void nk1_session(unsigned nb)
 {
-    inputs i;
+    in_vectors i;
     fill_inputs(&i, nb);
-    u8 server_pk  [32];  crypto_key_exchange_public_key(server_pk, i.server_sk);
-    u8 client_seed[32];  memcpy(client_seed, i.client_seed, 32);
-    u8 server_seed[32];  memcpy(server_seed, i.server_seed, 32);
+    PROTOCOL_ID("Monokex NK1");
+    EPHEMERAL(c);
+    EPHEMERAL(s);
+    STATIC(s);
+    i.pre_share_sps = 1;
+    PATTERN {
+        MESSAGE; _(E);
+        MESSAGE; _(E); _(EE); _(ES);
+    } END;
 
-    handshake_ctx client_ctx;
-    crypto_kex_nk1_client_init(&client_ctx.ctx, client_seed, server_pk);
-    memcpy(client_ctx.remote_key, server_pk, 32);
+    out_vectors o;
+    generate(&o, &i);
 
-    handshake_ctx server_ctx;
-    crypto_kex_nk1_server_init(&server_ctx.ctx, server_seed,
-                               i.server_sk, server_pk);
+    handshake_ctx client_ctx, server_ctx;
+    crypto_kex_nk1_client_init(&client_ctx.ctx, cse, sps);
+    crypto_kex_nk1_server_init(&server_ctx.ctx, sse, i.sss, sps);
+    memcpy(client_ctx.remote_key, sps, 32);
 
-    session(&client_ctx, &server_ctx, &i);
-    compare(&client_ctx, &server_ctx, 0, server_pk);
+    session(&client_ctx, &server_ctx, &i, &o);
+    compare(&client_ctx, &server_ctx, 0, sps);
 }
 
 void x_session(unsigned nb)
 {
-    inputs i;
+    in_vectors i;
     fill_inputs(&i, nb);
-    u8 client_pk  [32];  crypto_key_exchange_public_key(client_pk, i.client_sk);
-    u8 server_pk  [32];  crypto_key_exchange_public_key(server_pk, i.server_sk);
-    u8 client_seed[32];  memcpy(client_seed, i.client_seed, 32);
+    PROTOCOL_ID("Monokex X");
+    EPHEMERAL(c);
+    STATIC(c);
+    STATIC(s);
+    i.pre_share_sps = 1;
+    PATTERN {
+        MESSAGE; _(E); _(ES); _(S); _(SS);
+    } END;
 
-    handshake_ctx client_ctx;
-    crypto_kex_x_client_init(&client_ctx.ctx, client_seed,
-                             i.client_sk, client_pk, server_pk);
-    memcpy(client_ctx.remote_key, server_pk, 32);
+    out_vectors o;
+    generate(&o, &i);
 
-    handshake_ctx server_ctx;
-    crypto_kex_x_server_init(&server_ctx.ctx, i.server_sk, server_pk);
+    handshake_ctx client_ctx, server_ctx;
+    crypto_kex_x_client_init(&client_ctx.ctx, cse, i.css, cps, sps);
+    crypto_kex_x_server_init(&server_ctx.ctx, i.sss, sps);
+    memcpy(client_ctx.remote_key, sps, 32);
 
-    session(&client_ctx, &server_ctx, &i);
-    compare(&client_ctx, &server_ctx, client_pk, server_pk);
+    session(&client_ctx, &server_ctx, &i, &o);
+    compare(&client_ctx, &server_ctx, cps, sps);
 }
 
 int main()
