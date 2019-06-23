@@ -124,11 +124,7 @@ void generate(out_vectors *out, const in_vectors *in)
             if (has_key) { ABSORB_ENCRYPTED(payload, payload_size); }
             else         { ABSORB_RAW      (payload, payload_size); }
         } else {
-            // authentication tag (without payload)
-            if (has_key) {
-                auth(hash, m, hash);
-                m_size += 16;
-            }
+            if (has_key) { auth(hash, m, hash);  SKIP(16); }
         }
 
         // internal hash after message
