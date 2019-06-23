@@ -2,11 +2,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "utils.h"
+#include <inttypes.h>
 
+typedef uint8_t  u8;
+typedef uint64_t u64;
 typedef struct timespec timespec;
 
-#define BILLION  1000000000
+#define FOR(i, start, end)       for (size_t (i) = (start); (i) < (end); (i)++)
+#define RANDOM_INPUT(name, size) u8 name[size]; p_random(name, size)
+#define BILLION                  1000000000
+
+// Pseudo-random 64 bit number, based on xorshift*
+u64 rand64()
+{
+    static u64 x = 12345; // Must be seeded with a nonzero value.
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    return x * 0x2545F4914F6CDD1D; // magic constant
+}
+
+void p_random(u8 *stream, size_t size)
+{
+    FOR (i, 0, size) {
+        stream[i] = (u8)rand64();
+    }
+}
 
 // Difference in nanoseconds
 static u64 diff(timespec start, timespec end)

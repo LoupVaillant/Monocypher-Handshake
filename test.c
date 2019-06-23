@@ -4,7 +4,28 @@
 #include "monocypher.h"
 #include "monokex.h"
 #include "vectors.h"
-#include "utils.h"
+
+typedef uint8_t  u8;
+typedef uint64_t u64;
+
+#define FOR(i, start, end) for (size_t (i) = (start); (i) < (end); (i)++)
+
+// Pseudo-random 64 bit number, based on xorshift*
+u64 rand64()
+{
+    static u64 x = 12345; // Must be seeded with a nonzero value.
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    return x * 0x2545F4914F6CDD1D; // magic constant
+}
+
+void p_random(u8 *stream, size_t size)
+{
+    FOR (i, 0, size) {
+        stream[i] = (u8)rand64();
+    }
+}
 
 static void check(int condition, const char *error)
 {
