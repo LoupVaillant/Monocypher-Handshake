@@ -46,21 +46,16 @@ void encrypt(u8 next[64], u8 *ct, const u8 pred[64], const u8 *pt, size_t size)
 
 #define REC_HASH(out)      memcpy(out, hash, 64)
 #define MIX_HASH(in, size) mix_hash(hash, hash, in, size)
-#define APPEND_RAW(in, size)                   \
-    MIX_HASH(in, size);                        \
-    REC_HASH(out->message_hashes[msg_nb]);     \
-    memcpy(m, in, size);                       \
-    m      += (size);                          \
-    m_size += (size)
-#define APPEND(in, size)                       \
-    if (has_key) {                             \
-        encrypt(hash, m, hash, in, size);      \
-        REC_HASH(out->message_hashes[msg_nb]); \
-        m      += (size) + 16;                 \
-        m_size += (size) + 16;                 \
-    } else {                                   \
-        APPEND_RAW(in, size);                  \
-    } do {} while(0)
+#define SKIP(size)         m += (size);  m_size += (size)
+#define ABSORB_RAW(in, size)               \
+    MIX_HASH(in, size);                    \
+    REC_HASH(out->message_hashes[msg_nb]); \
+    memcpy(m, in, size);                   \
+    SKIP(size)
+#define ABSORB_ENCRYPTED(in, size)         \
+    encrypt(hash, m, hash, in, size);      \
+    REC_HASH(out->message_hashes[msg_nb]); \
+    SKIP(size + 16)
 
 void generate(out_vectors *out, const in_vectors *in)
 {
@@ -107,8 +102,12 @@ void generate(out_vectors *out, const in_vectors *in)
         int    action = 0;
         while (in->pattern[msg_nb][action] != STOP) {
             switch(in->pattern[msg_nb][action]) {
-            case E : APPEND_RAW(client_msg ? out->cpe : out->spe, 32); break;
-            case S : APPEND    (client_msg ? out->cps : out->sps, 32); break;
+            case E : ABSORB_RAW(client_msg ? out->cpe : out->spe, 32); break;
+            case S : {
+                u8 *static_key = client_msg ? out->cps : out->sps;
+                if (has_key) { ABSORB_ENCRYPTED(static_key, 32); }
+                else         { ABSORB_RAW      (static_key, 32); }
+            } break;
             case EE: MIX_HASH(out->ee, 32);  has_key = 1;              break;
             case ES: MIX_HASH(out->es, 32);  has_key = 1;              break;
             case SE: MIX_HASH(out->se, 32);  has_key = 1;              break;
@@ -120,7 +119,10 @@ void generate(out_vectors *out, const in_vectors *in)
 
         // payload
         if (in->has_payload[msg_nb]) {
-            APPEND(in->payloads[msg_nb], in->payload_sizes[msg_nb]);
+            const u8 *payload      = in->payloads[msg_nb];
+            size_t    payload_size = in->payload_sizes[msg_nb];
+            if (has_key) { ABSORB_ENCRYPTED(payload, payload_size); }
+            else         { ABSORB_RAW      (payload, payload_size); }
         } else {
             // authentication tag (without payload)
             if (has_key) {
