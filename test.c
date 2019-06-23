@@ -65,24 +65,6 @@ void fill_inputs(in_vectors *i, unsigned nb)
     i->has_payload[3]  = nb & 16 ? 1 : 0;
 }
 
-/* void print_inputs(const inputs *i) */
-/* { */
-/*     printf("client_sk  : "); print_vector(i->css, 32); */
-/*     printf("server_sk  : "); print_vector(i->sss, 32); */
-/*     printf("client_seed: "); print_vector(i->cse, 32); */
-/*     printf("server_seed: "); print_vector(i->sse, 32); */
-/*     if (i->has_prelude) { */
-/*         printf("prelude    : "); */
-/*         print_vector(i->prelude, 32); */
-/*     } */
-/*     FOR (j, 0, 4) { */
-/*         if (i->has_payload[j]) { */
-/*             printf("payload[%lu]    : ", j); */
-/*             print_vector(i->payloads[j], 32); */
-/*         } */
-/*     } */
-/* } */
-
 typedef struct {
     crypto_kex_ctx ctx;
     u8 session_key[ 32];
@@ -92,22 +74,6 @@ typedef struct {
     u8 messages[4][128];
     unsigned msg_num;
 } handshake_ctx;
-
-
-/* static void print_handshake(handshake_ctx *ctx) */
-/* { */
-/*     printf("session key  ");  print_vector(ctx->session_key,  32); */
-/*     printf("extra   key  ");  print_vector(ctx->extra_key  ,  32); */
-/*     printf("remote  key  ");  print_vector(ctx->remote_key ,  32); */
-/*     printf("payload 1    ");  print_vector(ctx->payloads[0],  32); */
-/*     printf("payload 2    ");  print_vector(ctx->payloads[1],  32); */
-/*     printf("payload 3    ");  print_vector(ctx->payloads[2],  32); */
-/*     printf("payload 4    ");  print_vector(ctx->payloads[3],  32); */
-/*     printf("message 1    ");  print_vector(ctx->messages[0], 128); */
-/*     printf("message 2    ");  print_vector(ctx->messages[1], 128); */
-/*     printf("message 3    ");  print_vector(ctx->messages[2], 128); */
-/*     printf("message 4    ");  print_vector(ctx->messages[3], 128); */
-/* } */
 
 static void step(handshake_ctx *ctx, u8 *msg,
                  const in_vectors  *i,
@@ -207,14 +173,6 @@ static void session(handshake_ctx *client_ctx,
         step(client_ctx, msg, i, o);
         step(server_ctx, msg, i, o);
     }
-
-    /* printf("Client handshake\n"); */
-    /* printf("----------------\n"); */
-    /* print_handshake(client_ctx); */
-    /* printf("\n"); */
-    /* printf("Server handshake\n"); */
-    /* printf("----------------\n"); */
-    /* print_handshake(server_ctx); */
 }
 
 static void compare(handshake_ctx *client_ctx,
