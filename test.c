@@ -118,7 +118,9 @@ static void step(handshake_ctx *ctx, u8 *msg,
             check_equal(o->messages[ctx->msg_num], msg, msg_size,
                         "Test vectors: wrong message");
             memcpy(ctx->messages[ctx->msg_num], msg, msg_size);
-            memcpy(ctx->payloads[ctx->msg_num], pld, pld_size);
+            if (pld) {
+                memcpy(ctx->payloads[ctx->msg_num], pld, pld_size);
+            }
             ctx->msg_num++;
             break;
         }
