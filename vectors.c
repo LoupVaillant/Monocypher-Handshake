@@ -6,7 +6,8 @@
 
 typedef uint8_t u8;
 
-void mix_hash(u8 next[64], const u8 pred[64], const u8 *in, size_t in_size)
+static void mix_hash(u8 next[64], const u8 pred[64],
+                     const u8 *in, size_t in_size)
 {
     crypto_blake2b_ctx ctx;
     crypto_blake2b_init  (&ctx);
@@ -15,7 +16,7 @@ void mix_hash(u8 next[64], const u8 pred[64], const u8 *in, size_t in_size)
     crypto_blake2b_final (&ctx, next);
 }
 
-void mix_hash2(u8 next[64], u8 extra[64], const u8 pred[64])
+static void mix_hash2(u8 next[64], u8 extra[64], const u8 pred[64])
 {
     static const u8 zero[1] = {0};
     static const u8 one [1] = {1};
@@ -23,14 +24,15 @@ void mix_hash2(u8 next[64], u8 extra[64], const u8 pred[64])
     mix_hash(extra, pred, one , 1);
 }
 
-void auth(u8 next[64], u8 *tag, const u8 pred[64])
+static void auth(u8 next[64], u8 *tag, const u8 pred[64])
 {
     u8 tmp[64];
     mix_hash2(next, tmp, pred);
     memcpy(tag, tmp, 16);
 }
 
-void encrypt(u8 next[64], u8 *ct, const u8 pred[64], const u8 *pt, size_t size)
+static void encrypt(u8       next[64], u8       *ct,
+                    const u8 pred[64], const u8 *pt, size_t size)
 {
     static const u8 zero[8] = {0};
 
@@ -86,7 +88,7 @@ void generate(out_vectors *out, const in_vectors *in)
 
     // prelude
     if (in->has_prelude) {
-        mix_hash(hash, hash, in->prelude, in->prelude_size);
+        MIX_HASH(in->prelude, in->prelude_size);
         REC_HASH(out->prelude_hash);
     }
 
