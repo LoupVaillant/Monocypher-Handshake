@@ -14,11 +14,8 @@ typedef struct {
 } crypto_kex_ctx;
 
 typedef enum {
-    CRYPTO_KEX_READ,
-    CRYPTO_KEX_WRITE,
-    CRYPTO_KEX_REMOTE_KEY,
-    CRYPTO_KEX_FINAL,
-    CRYPTO_KEX_NONE,
+    CRYPTO_KEX_READ,  CRYPTO_KEX_WRITE, CRYPTO_KEX_REMOTE_KEY,
+    CRYPTO_KEX_FINAL, CRYPTO_KEX_NONE
 } crypto_kex_action;
 
 // Basic read & write functions

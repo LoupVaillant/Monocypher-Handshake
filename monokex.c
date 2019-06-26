@@ -9,12 +9,7 @@
 #define WIPE_BUFFER(buffer)  crypto_wipe(buffer, sizeof(buffer))
 
 // Message token bytecode
-#define E   1 // ephemeral key
-#define S   2 // static key (plaintext)
-#define EE  3 // ee exchange
-#define ES  4 // es exchange
-#define SE  5 // se exchange
-#define SS  6 // ss exchange
+typedef enum { E=1, S=2, EE=3, ES=4, SE=5, SS=6 } action;
 static int is_key     (unsigned i) { return i <= S;  }
 static int is_exchange(unsigned i) { return i >= EE; }
 
@@ -63,7 +58,7 @@ void kex_mix_hash(crypto_kex_ctx *ctx, const u8 *input, size_t input_size)
     mix_hash(ctx->hash, ctx->hash, input, input_size);
 }
 
-void kex_extra_hash(crypto_kex_ctx *ctx, u8 *out)
+static void kex_extra_hash(crypto_kex_ctx *ctx, u8 *out)
 {
     u8 zero[1] = {0};
     u8 one [1] = {1};

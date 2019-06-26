@@ -13,7 +13,7 @@ typedef struct timespec timespec;
 #define BILLION                  1000000000
 
 // Pseudo-random 64 bit number, based on xorshift*
-u64 rand64()
+static u64 rand64()
 {
     static u64 x = 12345; // Must be seeded with a nonzero value.
     x ^= x >> 12;
@@ -22,7 +22,7 @@ u64 rand64()
     return x * 0x2545F4914F6CDD1D; // magic constant
 }
 
-void p_random(u8 *stream, size_t size)
+static void p_random(u8 *stream, size_t size)
 {
     FOR (i, 0, size) {
         stream[i] = (u8)rand64();

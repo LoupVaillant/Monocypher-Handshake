@@ -11,7 +11,7 @@ typedef uint64_t u64;
 #define FOR(i, start, end) for (size_t (i) = (start); (i) < (end); (i)++)
 
 // Pseudo-random 64 bit number, based on xorshift*
-u64 rand64()
+static u64 rand64()
 {
     static u64 x = 12345; // Must be seeded with a nonzero value.
     x ^= x >> 12;
@@ -20,7 +20,7 @@ u64 rand64()
     return x * 0x2545F4914F6CDD1D; // magic constant
 }
 
-void p_random(u8 *stream, size_t size)
+static void p_random(u8 *stream, size_t size)
 {
     FOR (i, 0, size) {
         stream[i] = (u8)rand64();
@@ -41,7 +41,7 @@ static void check_equal(const u8 *a, const u8 *b, size_t size,
     check(!memcmp(a, b, size), error);
 }
 
-void fill_inputs(in_vectors *i, unsigned nb)
+static void fill_inputs(in_vectors *i, unsigned nb)
 {
     memset(i, 0, sizeof(*i));
     p_random(i->cse, 32);
@@ -148,11 +148,11 @@ static void session(handshake_ctx *client_ctx,
 {
     client_ctx->msg_num = 0;
     server_ctx->msg_num = 0;
-    FOR (i, 0, 4) {
-        memset(client_ctx->messages[i], 255, 128);
-        memset(server_ctx->messages[i], 255, 128);
-        memset(client_ctx->payloads[i], 255,  32);
-        memset(server_ctx->payloads[i], 255,  32);
+    FOR (j, 0, 4) {
+        memset(client_ctx->messages[j], 255, 128);
+        memset(server_ctx->messages[j], 255, 128);
+        memset(client_ctx->payloads[j], 255,  32);
+        memset(server_ctx->payloads[j], 255,  32);
     }
 
     check_equal(client_ctx->ctx.hash, o->initial_hash, 64,
@@ -334,7 +334,7 @@ static void nk1_session(unsigned nb)
     compare(&client_ctx, &server_ctx, 0, sps);
 }
 
-void x_session(unsigned nb)
+static void x_session(unsigned nb)
 {
     in_vectors i;
     fill_inputs(&i, nb);
