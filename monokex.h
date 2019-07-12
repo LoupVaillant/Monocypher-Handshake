@@ -28,11 +28,8 @@ typedef enum {
 // undefined.  (The implementation tries to fail loudly, though)
 //
 // Padding bytes are ignored by crypto_kex_read().
-//
-int  crypto_kex_read(crypto_kex_ctx *ctx,
-                     const uint8_t *message, size_t message_size);
-void crypto_kex_write(crypto_kex_ctx *ctx,
-                      uint8_t *message, size_t message_size);
+int  crypto_kex_read (crypto_kex_ctx *ctx, const uint8_t *msg, size_t size);
+void crypto_kex_write(crypto_kex_ctx *ctx, uint8_t       *msg, size_t size);
 
 // Advanced read & write functions (with payload)
 // Maximum message size is 96 bytes, plus the size of the payload.
@@ -40,12 +37,12 @@ void crypto_kex_write(crypto_kex_ctx *ctx,
 // If payload is NULL, no payload is sent. Payload_size must be zero.
 // If payload_size is zero, but payload is not NULL, an empty payload is
 // sent.
-int  crypto_kex_read_p(crypto_kex_ctx *ctx,
-                       uint8_t       *payload, size_t payload_size,
-                       const uint8_t *message, size_t message_size);
+int crypto_kex_read_p(crypto_kex_ctx *ctx,
+                      uint8_t        *payload, size_t payload_size,
+                      const uint8_t  *message, size_t message_size);
 void crypto_kex_write_p(crypto_kex_ctx *ctx,
-                        uint8_t       *message, size_t message_size,
-                        const uint8_t *payload, size_t payload_size);
+                        uint8_t        *message, size_t message_size,
+                        const uint8_t  *payload, size_t payload_size);
 
 // Adds a prelude to the transcript hash.
 // Call once, just after crypto_kex_*_init().
@@ -76,8 +73,6 @@ void crypto_kex_final(crypto_kex_ctx *ctx,
 // message (without payload) will be written in it.
 crypto_kex_action crypto_kex_next_action(const crypto_kex_ctx *ctx,
                                          size_t *next_message_size);
-
-
 ///////////
 /// XK1 ///
 ///////////
@@ -215,5 +210,6 @@ void crypto_kex_x_client_init(crypto_kex_ctx *ctx,
 // - remote key
 // - final
 void crypto_kex_x_server_init(crypto_kex_ctx *ctx,
-                              const uint8_t   server_sk [32],
-                              const uint8_t   server_pk [32]);
+                              const uint8_t   server_sk[32],
+                              const uint8_t   server_pk[32]);
+

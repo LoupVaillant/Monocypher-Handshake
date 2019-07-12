@@ -4,9 +4,9 @@
 /////////////////
 /// Utilities ///
 /////////////////
-#define FOR(i, start, end)   for (size_t (i) = (start); (i) < (end); (i)++)
-#define WIPE_CTX(ctx)        crypto_wipe(ctx   , sizeof(*(ctx)))
-#define WIPE_BUFFER(buffer)  crypto_wipe(buffer, sizeof(buffer))
+#define FOR(i, start, end)  for (size_t (i) = (start); (i) < (end); (i)++)
+#define WIPE_CTX(ctx)       crypto_wipe(ctx   , sizeof(*(ctx)))
+#define WIPE_BUFFER(buffer) crypto_wipe(buffer, sizeof(buffer))
 
 // Message token bytecode
 typedef enum { E=1, S=2, EE=3, ES=4, SE=5, SS=6 } action;
@@ -67,8 +67,8 @@ static void kex_extra_hash(crypto_kex_ctx *ctx, u8 *out)
 }
 
 static void kex_update_key(crypto_kex_ctx *ctx,
-                           const u8        secret_key[32],
-                           const u8        public_key[32])
+                           const u8 secret_key[32],
+                           const u8 public_key[32])
 {
     u8 tmp[32];
     crypto_x25519(tmp, secret_key, public_key);
@@ -189,21 +189,56 @@ static void kex_locals(crypto_kex_ctx *ctx, const u8 s[32], const u8 sp[32])
 //////////////////////
 /// Send & receive ///
 //////////////////////
-void crypto_kex_write(crypto_kex_ctx *ctx,
-                      u8 *message, size_t message_size)
+int crypto_kex_read (crypto_kex_ctx *ctx, const u8 *m, size_t m_size)
 {
-    crypto_kex_write_p(ctx, message, message_size, 0, 0);
+    return crypto_kex_read_p(ctx, 0, 0, m, m_size);
 }
 
-int crypto_kex_read(crypto_kex_ctx *ctx,
-                    const u8 *message, size_t message_size)
+void crypto_kex_write(crypto_kex_ctx *ctx, u8 *m, size_t m_size)
 {
-    return crypto_kex_read_p(ctx, 0, 0, message, message_size);
+    crypto_kex_write_p(ctx, m, m_size, 0, 0);
+}
+
+int crypto_kex_read_p(crypto_kex_ctx *ctx,
+                      u8             *p, size_t p_size,
+                      const u8       *m, size_t m_size)
+{
+    // Do nothing & fail if we should not receive
+    size_t min_size;
+    if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_READ ||
+        m_size < min_size + p_size) {
+        WIPE_CTX(ctx);
+        return -1;
+    }
+    // Next time, we'll send
+    ctx->flags |= SHOULD_SEND;
+
+    // receive core message
+    while (ctx->messages[0] != 0) { // message not yet empty
+        size_t tag_size = ctx->flags & HAS_KEY ? 16 : 0;
+        switch (kex_next_token(ctx)) {
+        case E : kex_read_raw(ctx, ctx->er, m, 32);  m += 32;  break;
+        case S : if (kex_read(ctx, ctx->sr, m, 32)) { return -1; }
+                 m += 32 + tag_size;
+                 ctx->flags |= HAS_REMOTE;                     break;
+        case EE: kex_update_key(ctx, ctx->e, ctx->er);         break;
+        case ES: kex_update_key(ctx, ctx->e, ctx->sr);         break;
+        case SE: kex_update_key(ctx, ctx->s, ctx->er);         break;
+        case SS: kex_update_key(ctx, ctx->s, ctx->sr);         break;
+        default:; // never happens
+        }
+    }
+    kex_next_message(ctx);
+
+    // Read payload, if any
+    if (p != 0) { if (kex_read(ctx, p, m, p_size)) { return -1; } }
+    else        { if (kex_verify(ctx, m)         ) { return -1; } }
+    return 0;
 }
 
 void crypto_kex_write_p(crypto_kex_ctx *ctx,
-                        u8       *m, size_t m_size,
-                        const u8 *p, size_t p_size)
+                        u8             *m, size_t m_size,
+                        const u8       *p, size_t p_size)
 {
     // Fail if we should not send (the failure is alas delayed)
     size_t min_size;
@@ -241,47 +276,10 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
     }
 }
 
-int crypto_kex_read_p(crypto_kex_ctx *ctx,
-                      u8       *p, size_t p_size,
-                      const u8 *m, size_t m_size)
-{
-    // Do nothing & fail if we should not receive
-    size_t min_size;
-    if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_READ ||
-        m_size < min_size + p_size) {
-        WIPE_CTX(ctx);
-        return -1;
-    }
-    // Next time, we'll send
-    ctx->flags |= SHOULD_SEND;
-
-    // receive core message
-    while (ctx->messages[0] != 0) { // message not yet empty
-        size_t tag_size = ctx->flags & HAS_KEY ? 16 : 0;
-        switch (kex_next_token(ctx)) {
-        case E : kex_read_raw(ctx, ctx->er, m, 32);  m += 32;  break;
-        case S : if (kex_read(ctx, ctx->sr, m, 32)) { return -1; }
-                 m += 32 + tag_size;
-                 ctx->flags |= HAS_REMOTE;                     break;
-        case EE: kex_update_key(ctx, ctx->e, ctx->er);         break;
-        case ES: kex_update_key(ctx, ctx->e, ctx->sr);         break;
-        case SE: kex_update_key(ctx, ctx->s, ctx->er);         break;
-        case SS: kex_update_key(ctx, ctx->s, ctx->sr);         break;
-        default:; // never happens
-        }
-    }
-    kex_next_message(ctx);
-
-    // Read payload, if any
-    if (p != 0) { if (kex_read(ctx, p, m, p_size)) { return -1; } }
-    else        { if (kex_verify(ctx, m)         ) { return -1; } }
-    return 0;
-}
-
 ///////////////
 /// Outputs ///
 ///////////////
-void crypto_kex_remote_key(crypto_kex_ctx *ctx, uint8_t key[32])
+void crypto_kex_remote_key(crypto_kex_ctx *ctx, u8 key[32])
 {
     if (!(ctx->flags & HAS_REMOTE)) {
         WIPE_CTX(ctx);
@@ -430,9 +428,9 @@ void crypto_kex_ix_client_init(crypto_kex_ctx *ctx,
 }
 
 void crypto_kex_ix_server_init(crypto_kex_ctx *ctx,
-                                u8              random_seed[32],
-                                const u8        server_sk  [32],
-                                const u8        server_pk  [32])
+                               u8              random_seed[32],
+                               const u8        server_sk  [32],
+                               const u8        server_pk  [32])
 {
     kex_init    (ctx, pid_ix);
     kex_seed    (ctx, random_seed);
@@ -450,8 +448,8 @@ void crypto_kex_ix_server_init(crypto_kex_ctx *ctx,
 static const u8 pid_nk1[64] = "Monokex NK1";
 
 void crypto_kex_nk1_client_init(crypto_kex_ctx *ctx,
-                                uint8_t         random_seed[32],
-                                const uint8_t   server_pk  [32])
+                                u8              random_seed[32],
+                                const u8        server_pk  [32])
 {
     kex_init    (ctx, pid_nk1);
     kex_seed    (ctx, random_seed);
@@ -465,9 +463,9 @@ void crypto_kex_nk1_client_init(crypto_kex_ctx *ctx,
 }
 
 void crypto_kex_nk1_server_init(crypto_kex_ctx *ctx,
-                                uint8_t         random_seed[32],
-                                const uint8_t   server_sk  [32],
-                                const uint8_t   server_pk  [32])
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32])
 {
     kex_init    (ctx, pid_nk1);
     kex_seed    (ctx, random_seed);
@@ -478,7 +476,6 @@ void crypto_kex_nk1_server_init(crypto_kex_ctx *ctx,
     ctx->messages[3] = 0;
     kex_mix_hash(ctx, ctx->sp, 32);
 }
-
 
 /////////
 /// X ///
@@ -504,8 +501,8 @@ void crypto_kex_x_client_init(crypto_kex_ctx *ctx,
 }
 
 void crypto_kex_x_server_init(crypto_kex_ctx *ctx,
-                              const u8        server_sk [32],
-                              const u8        server_pk [32])
+                              const u8        server_sk[32],
+                              const u8        server_pk[32])
 {
     kex_init    (ctx, pid_x);
     kex_locals  (ctx, server_sk, server_pk);
@@ -516,3 +513,4 @@ void crypto_kex_x_server_init(crypto_kex_ctx *ctx,
     ctx->messages[3] = 0;
     kex_mix_hash(ctx, ctx->sp, 32);
 }
+
