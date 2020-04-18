@@ -157,9 +157,9 @@ static void kex_init(crypto_kex_ctx *ctx, const u8 pid[32])
 
 static void kex_seed(crypto_kex_ctx *ctx, u8 random_seed[32])
 {
-    copy(ctx->e, random_seed, 32);
-    crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
-    crypto_x25519_public_key(ctx->ep, ctx->e);
+    crypto_chacha20(ctx->seed, 0, 64, random_seed, zero);
+    crypto_hidden_key_pair(ctx->ep, ctx->e, ctx->seed + 32);
+    crypto_wipe(random_seed, 32);
 }
 
 static void kex_locals(crypto_kex_ctx *ctx, const u8 s[32], const u8 sp[32])
@@ -200,7 +200,9 @@ int crypto_kex_read_p(crypto_kex_ctx *ctx,
     while (ctx->messages[0] != 0) { // message not yet empty
         size_t tag_size = ctx->flags & HAS_KEY ? 16 : 0;
         switch (kex_next_token(ctx)) {
-        case E : kex_read_raw(ctx, ctx->er, m, 32);  m += 32;  break;
+        case E : kex_read_raw(ctx, ctx->er, m, 32);
+                 m += 32;
+                 crypto_hidden_to_curve(ctx->er, ctx->er);     break;
         case S : if (kex_read(ctx, ctx->sr, m, 32)) { return -1; }
                  m += 32 + tag_size;
                  ctx->flags |= HAS_REMOTE;                     break;
@@ -254,9 +256,8 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
     else        { kex_auth (ctx, m);            m += tag_size;          }
 
     // Pad
-    FOR (i, 0, m_size - min_size - p_size) {
-        m[i] = 0;
-    }
+    crypto_chacha20(ctx->seed, 0, 64, ctx->seed, zero);
+    crypto_chacha20(m, 0, m_size - min_size - p_size, ctx->seed + 32, zero);
 }
 
 ///////////////
