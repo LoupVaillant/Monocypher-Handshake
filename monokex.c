@@ -30,35 +30,23 @@ static void copy(u8 *out, const u8 *in, size_t nb)
     }
 }
 
-static void encrypt(u8 *out, const u8 *in, size_t size, const u8 key[32])
-{
-    static const u8 zero[8] = {0};
-    crypto_chacha20(out, in, size, key, zero);
-}
-
-static void mix_hash(u8 after[64], const u8 before[64],
-                     const u8 *input, size_t input_size)
-{
-    crypto_blake2b_general(after, 64, before, 64, input, input_size);
-}
+static const u8 zero[8] = {0};
 
 /////////////////////
 /// State machine ///
 /////////////////////
-
 #define kex_mix_hash crypto_kex_add_prelude // it's the same thing
 
 void kex_mix_hash(crypto_kex_ctx *ctx, const u8 *input, size_t input_size)
 {
-    mix_hash(ctx->hash, ctx->hash, input, input_size);
+    crypto_blake2b_general(ctx->hash, 64, ctx->hash, 64, input, input_size);
 }
 
-static void kex_extra_hash(crypto_kex_ctx *ctx, u8 *out)
+static void kex_extra_hash(crypto_kex_ctx *ctx, u8 out[64])
 {
-    u8 zero[1] = {0};
     u8 one [1] = {1};
-    mix_hash(ctx->hash, ctx->hash, zero, 1); // next chaining hash
-    mix_hash(out      , ctx->hash, one , 1); // extra hash
+    crypto_blake2b_general(ctx->hash, 64, ctx->hash, 64, zero, 1);
+    crypto_blake2b_general(out      , 64, ctx->hash, 64,  one, 1);
 }
 
 static void kex_update_key(crypto_kex_ctx *ctx,
@@ -118,7 +106,7 @@ static void kex_write(crypto_kex_ctx *ctx, u8 *msg, const u8 *src, size_t size)
     // we have a key, we encrypt
     u8 key[64]; // actually 32 useful bytes
     kex_extra_hash(ctx, key);
-    encrypt(msg, src, size, key);
+    crypto_chacha20(msg, src, size, key, zero);
     kex_mix_hash(ctx, msg, size);
     kex_auth(ctx, msg + size);
     WIPE_BUFFER(key);
@@ -138,7 +126,7 @@ static int kex_read(crypto_kex_ctx *ctx, u8 *dest, const u8 *msg, size_t size)
         WIPE_BUFFER(key);
         return -1;
     }
-    encrypt(dest, msg, size, key);
+    crypto_chacha20(dest, msg, size, key, zero);
     WIPE_BUFFER(key);
     return 0;
 }
