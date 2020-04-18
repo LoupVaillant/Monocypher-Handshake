@@ -33,20 +33,13 @@ static void copy(u8 *out, const u8 *in, size_t nb)
 static void encrypt(u8 *out, const u8 *in, size_t size, const u8 key[32])
 {
     static const u8 zero[8] = {0};
-    crypto_chacha_ctx ctx;
-    crypto_chacha20_init   (&ctx, key, zero);
-    crypto_chacha20_encrypt(&ctx, out, in, size);
-    WIPE_CTX(&ctx);
+    crypto_chacha20(out, in, size, key, zero);
 }
 
 static void mix_hash(u8 after[64], const u8 before[64],
                      const u8 *input, size_t input_size)
 {
-    crypto_blake2b_ctx ctx;
-    crypto_blake2b_init  (&ctx);
-    crypto_blake2b_update(&ctx, before, 64);
-    crypto_blake2b_update(&ctx, input, input_size);
-    crypto_blake2b_final (&ctx, after);
+    crypto_blake2b_general(after, 64, before, 64, input, input_size);
 }
 
 /////////////////////

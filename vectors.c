@@ -9,11 +9,7 @@ typedef uint8_t u8;
 static void mix_hash(u8 next[64], const u8 pred[64],
                      const u8 *in, size_t in_size)
 {
-    crypto_blake2b_ctx ctx;
-    crypto_blake2b_init  (&ctx);
-    crypto_blake2b_update(&ctx, pred, 64);
-    crypto_blake2b_update(&ctx, in, in_size);
-    crypto_blake2b_final (&ctx, next);
+    crypto_blake2b_general(next, 64, pred, 64, in, in_size);
 }
 
 static void mix_hash2(u8 next[64], u8 extra[64], const u8 pred[64])
@@ -39,9 +35,7 @@ static void encrypt(u8       next[64], u8       *ct,
     // encrypt message
     u8 key[64];
     mix_hash2(next, key, pred);     // extract key
-    crypto_chacha_ctx ctx;
-    crypto_chacha20_init   (&ctx, key, zero);
-    crypto_chacha20_encrypt(&ctx, ct, pt, size);
+    crypto_chacha20(ct, pt, size, key, zero);
     mix_hash(next, next, ct, size); // update hash with message
     auth(next, ct + size, next);    // extract authentication tag
 }
