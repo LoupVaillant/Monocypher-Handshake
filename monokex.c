@@ -22,10 +22,12 @@ static int is_exchange(unsigned i) { return i >= EE; }
 
 typedef uint8_t u8;
 
-// memcmp clone
+// memcpy clone
 static void copy(u8 *out, const u8 *in, size_t nb)
 {
-    FOR(i, 0, nb) out[i] = in[i];
+    FOR(i, 0, nb) {
+        out[i] = in[i];
+    }
 }
 
 static void encrypt(u8 *out, const u8 *in, size_t size, const u8 key[32])
