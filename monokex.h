@@ -23,7 +23,7 @@ typedef enum {
 // Maximum message size is 96 bytes
 //
 // If message_size is bigger than the actual message, the message will
-// be padded with zeroes.
+// be padded with random data.
 //
 // If message_size is smaller than the actual message, the behaviour is
 // undefined.  (The implementation tries to fail loudly, though)
