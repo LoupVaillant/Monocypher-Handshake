@@ -189,7 +189,8 @@ int crypto_kex_read_p(crypto_kex_ctx *ctx,
     // Do nothing & fail if we should not receive
     size_t min_size;
     if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_READ ||
-        m_size < min_size + p_size) {
+        m_size < min_size + p_size                                ||
+        (p == 0 && p_size != 0)) {
         WIPE_CTX(ctx);
         return -1;
     }
@@ -228,7 +229,8 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
     // Fail if we should not send (the failure is alas delayed)
     size_t min_size;
     if (crypto_kex_next_action(ctx, &min_size) != CRYPTO_KEX_WRITE ||
-        m_size < min_size + p_size) {
+        m_size < min_size + p_size                                 ||
+        (p == 0 && p_size != 0)) {
         WIPE_CTX(ctx);
         return;
     }
