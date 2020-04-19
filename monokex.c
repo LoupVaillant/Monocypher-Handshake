@@ -8,19 +8,20 @@
 #define WIPE_CTX(ctx)       crypto_wipe(ctx   , sizeof(*(ctx)))
 #define WIPE_BUFFER(buffer) crypto_wipe(buffer, sizeof(buffer))
 
+typedef uint8_t   u8;
+typedef uint16_t u16;
+
 // Message token bytecode
 typedef enum { E=1, S=2, EE=3, ES=4, SE=5, SS=6 } action;
 static int is_key     (unsigned i) { return i <= S;  }
 static int is_exchange(unsigned i) { return i >= EE; }
 
 // Context status flags
-#define IS_OK        1 // Allways 1 (becomes zero when wiped)
-#define HAS_KEY      2 // True if we have a symmetric key
-#define HAS_REMOTE   4 // True if we have the remote DH key
-#define GETS_REMOTE  8 // True if the remote key is transmitted to us
-#define SHOULD_SEND 16 // Send/receive toggle
-
-typedef uint8_t u8;
+static const u16 IS_OK       =  1; // Allways 1 (becomes zero when wiped)
+static const u16 HAS_KEY     =  2; // True if we have a symmetric key
+static const u16 HAS_REMOTE  =  4; // True if we have the remote DH key
+static const u16 GETS_REMOTE =  8; // True if the remote key is wanted
+static const u16 SHOULD_SEND = 16; // Send/receive toggle
 
 // memcpy clone
 static void copy(u8 *out, const u8 *in, size_t nb)
