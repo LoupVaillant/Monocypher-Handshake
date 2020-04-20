@@ -2,7 +2,7 @@
 #include <stddef.h>
 
 typedef struct {
-    uint8_t  seed[64];    // RNG seed
+    uint8_t  pool[64];    // random pool
     uint8_t  hash[64];    // chaining hash
     uint8_t  s [32];      // static    secret key
     uint8_t  sp[32];      // static    public key

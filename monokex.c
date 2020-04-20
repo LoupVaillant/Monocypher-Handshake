@@ -158,8 +158,9 @@ static void kex_init(crypto_kex_ctx *ctx, const u8 pid[32])
 
 static void kex_seed(crypto_kex_ctx *ctx, u8 random_seed[32])
 {
-    crypto_chacha20(ctx->seed, 0, 64, random_seed, zero);
-    crypto_hidden_key_pair(ctx->ep, ctx->e, ctx->seed + 32);
+    crypto_chacha20(ctx->pool, 0, 64, random_seed, zero);
+    crypto_hidden_key_pair(ctx->ep, ctx->e, ctx->pool + 32);
+    // The first half of the pool will later generate the next pool
     crypto_wipe(random_seed, 32);
 }
 
@@ -261,8 +262,11 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
     // Pad
     size_t pad_size = m_size - min_size - p_size;
     if (pad_size != 0) {
-        crypto_chacha20(ctx->seed, 0, 64, ctx->seed, zero);
-        crypto_chacha20(m, 0, pad_size, ctx->seed + 32, zero);
+        // Regenerate the pool with its first half,
+        // then use the second half for padding.
+        // That way we keep the first half of the pool fresh.
+        crypto_chacha20(ctx->pool, 0, 64, ctx->pool, zero);
+        crypto_chacha20(m, 0, pad_size, ctx->pool + 32, zero);
     }
 }
 
