@@ -1,5 +1,5 @@
 CC=gcc -std=gnu99
-CFLAGS= -pedantic -Wall -Wextra -O3 -march=native -g
+CFLAGS= -pedantic -Wall -Wextra -Og -g
 
 .PHONY: all library static-library dynamic-library \
         check test vectors speed \
@@ -10,8 +10,6 @@ all: monokex.o
 check: test
 test: test.out
 	./test.out
-vectors: vectors.out
-	./vectors.out
 speed: speed.out
 	./speed.out
 
@@ -20,13 +18,12 @@ clean:
 
 monocypher.o: monocypher.c                     monocypher.h
 monokex.o   : monokex.c              monokex.h monocypher.h
-vectors.o   : vectors.c    vectors.h           monocypher.h
 test.o      : test.c       vectors.h monokex.h monocypher.h
 speed.o     : speed.c                monokex.h monocypher.h
-monokex.o test.o speed.o vectors.o:
+monokex.o test.o speed.o:
 	$(CC) $(CFLAGS) -fPIC -c -o $@ $<
 
 test.out   : test.o  vectors.o  monokex.o monocypher.o
 speed.out  : speed.o            monokex.o monocypher.o
-test.out vectors.out speed.out:
+test.out speed.out:
 	$(CC) $(CFLAGS) -fPIC -o $@ $^
