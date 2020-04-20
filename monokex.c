@@ -259,8 +259,11 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
     else        { kex_auth (ctx, m);            m += tag_size;          }
 
     // Pad
-    crypto_chacha20(ctx->seed, 0, 64, ctx->seed, zero);
-    crypto_chacha20(m, 0, m_size - min_size - p_size, ctx->seed + 32, zero);
+    size_t pad_size = m_size - min_size - p_size;
+    if (pad_size != 0) {
+        crypto_chacha20(ctx->seed, 0, 64, ctx->seed, zero);
+        crypto_chacha20(m, 0, pad_size, ctx->seed + 32, zero);
+    }
 }
 
 ///////////////
