@@ -6,6 +6,7 @@
 #include "monokex.h"
 
 typedef uint8_t  u8;
+typedef uint16_t u16;
 typedef uint64_t u64;
 
 #define FOR(i, start, end) for (size_t (i) = (start); (i) < (end); (i)++)
@@ -28,6 +29,14 @@ static void p_random(u8 *stream, size_t size)
     }
 }
 
+// Context status flags
+static const u16 IS_OK       =  1; // Allways 1 (becomes zero when wiped)
+static const u16 HAS_REMOTE  =  4; // True if we have the remote DH key
+static const u16 GETS_REMOTE =  8; // True if the remote key is wanted
+
+// message tokens
+typedef enum { NOOP=0, E=1, S=2, EE=3, ES=4, SE=5, SS=6 } action;
+
 typedef struct {
     u8 session_key[32];
     u8 extra_key  [32];
@@ -48,15 +57,19 @@ static void step(crypto_kex_ctx *ctx, keys *keys,
         case CRYPTO_KEX_READ:
             assert(
                 !crypto_kex_read_p(ctx, p_out, p_osize, m_in, m_size+p_osize));
+            assert(ctx->flags & IS_OK);
             break;
         case CRYPTO_KEX_WRITE:
             crypto_kex_write_p(ctx, m_out, m_size + p_isize, p_in, p_isize);
+            assert(ctx->flags & IS_OK);
             break;
         case CRYPTO_KEX_REMOTE_KEY:
             crypto_kex_remote_key(ctx, keys->remote_key);
+            assert(ctx->flags & IS_OK);
             break;
         case CRYPTO_KEX_FINAL:
             crypto_kex_final(ctx, keys->session_key, keys->extra_key);
+            assert(ctx->flags == 0);
             break;
         default:
             break;
@@ -66,14 +79,107 @@ static void step(crypto_kex_ctx *ctx, keys *keys,
              action != CRYPTO_KEX_READ);
 }
 
+static void load_pattern(action pattern[4][5], const crypto_kex_ctx *ctx)
+{
+    FOR (i, 0, 4) {
+        u16 message = ctx->messages[i];
+        FOR (j, 0, 5) {
+            pattern[i][j] = message & 7;
+            message >>= 3;
+        }
+    }
+}
+
+
+static void mix_hash(u8 hash[64], const u8 *in, u8 size)
+{
+    crypto_blake2b_general(hash, 64, hash, 64, in, size);
+}
+
+static void split_hash(u8 hash[64], u8 *extra, size_t size)
+{
+    static const u8 zero[1] = {0};
+    static const u8 one [1] = {1};
+    u8 tmp[64];
+    crypto_blake2b_general(hash, 64, hash, 64, zero, 1);
+    crypto_blake2b_general(tmp , 64, hash, 64, one , 1);
+    memcpy(extra, tmp, size);
+}
+
+static void e_mix_hash(u8 hash[64], u8 *in, u8 size)
+{
+    static const u8 zero[8] = {0};
+    u8 key[32];
+    u8 tmp[128];
+    split_hash(hash, key, 32);
+    crypto_chacha20(tmp, in, size, key, zero);
+    mix_hash(hash, tmp , size);  // absorb encrypted message
+    mix_hash(hash, zero, 1   );  // split for authentication tag
+}
+
+static void exchange(u8 hash[64], u8 s1[32], u8 p1[32], u8 s2[32], u8 p2[32])
+{
+    u8 t1[32], t2[32];
+    crypto_x25519(t1, s1, p2);
+    crypto_x25519(t2, s2, p1);
+    assert(!memcmp(t1, t2, 32));
+    mix_hash(hash, t1, 32);
+}
+
 static int has_prelude(unsigned flags)             { return (flags >> 4) & 1; }
 static int has_payload(unsigned flags, unsigned i) { return (flags >> i) & 1; }
 
 static void session(crypto_kex_ctx *client,
                     crypto_kex_ctx *server,
+                    u8              pid[64],
                     unsigned        flags)
 {
-    // prelude and payloads (whether we use them or not)
+    // Pattern
+    action client_pattern[4][5];  load_pattern(client_pattern, client);
+    action server_pattern[4][5];  load_pattern(server_pattern, server);
+    size_t nb_msg;
+    FOR (i, 0, 4) {
+        if (client_pattern[i][0] != NOOP) {
+            nb_msg = i + 1;
+        }
+        FOR (j, 0, 5) {
+            action token = server_pattern[i][j];
+            if (token == SE) { server_pattern[i][j] = ES; }
+            if (token == ES) { server_pattern[i][j] = SE; }
+            assert(client_pattern[i][j] == server_pattern[i][j]);
+        }
+    }
+
+    // keys
+    int has_cs = server->flags & (HAS_REMOTE | GETS_REMOTE);
+    int has_ss = client->flags & (HAS_REMOTE | GETS_REMOTE);
+    int has_ce = 1; // client always sends a message
+    int has_se = nb_msg >= 2;
+
+    u8 ces[32], cep[32], ses[32], sep[32];
+    u8 css[32], csp[32], sss[32], ssp[32];
+    if (has_ce){memcpy(ces, client->e, 32); crypto_x25519_public_key(cep, ces);}
+    if (has_se){memcpy(ses, server->e, 32); crypto_x25519_public_key(sep, ses);}
+    if (has_cs){memcpy(css, client->s, 32); crypto_x25519_public_key(csp, css);}
+    if (has_ss){memcpy(sss, server->s, 32); crypto_x25519_public_key(ssp, sss);}
+    if (has_cs) { assert(!memcmp(client->sp, csp, 32)); }
+    if (has_ss) { assert(!memcmp(server->sp, ssp, 32)); }
+
+    // Initial hash
+    u8 hash[64];
+    memcpy(hash, pid, 64);
+    if (server->flags & HAS_REMOTE) {
+        assert(!memcmp(client->sp, server->sr, 32));
+        crypto_blake2b_general(hash, 64, hash, 64, client->sp, 32);
+    }
+    if (client->flags & HAS_REMOTE) {
+        assert(!memcmp(server->sp, client->sr, 32));
+        crypto_blake2b_general(hash, 64, hash, 64, server->sp, 32);
+    }
+    assert(!memcmp(client->hash, hash, 64));
+    assert(!memcmp(server->hash, hash, 64));
+
+    // Generate prelude and payloads
     int prelude_size;
     u8  prelude[32];
     prelude_size = rand64() % 32 + 1;
@@ -90,14 +196,46 @@ static void session(crypto_kex_ctx *client,
         }
     }
 
-    // Initial hash
-    assert(!memcmp(client->hash, server->hash, 64));
-
     // Prelude
     if (has_prelude(flags)) {
         crypto_kex_add_prelude(client, prelude, prelude_size);
         crypto_kex_add_prelude(server, prelude, prelude_size);
-        assert(!memcmp(client->hash, server->hash, 64));
+        mix_hash(hash, prelude, prelude_size);
+        assert(!memcmp(client->hash, hash, 64));
+        assert(!memcmp(server->hash, hash, 64));
+    }
+
+    int has_key = 0; // can encrypt
+    FOR (i, 0, 4) {
+        if (client_pattern[i][0] == NOOP) {
+            break;
+        }
+        FOR (j, 0, 5) {
+            switch (client_pattern[i][j]) {
+            case EE  : exchange(hash, ces, cep, ses, sep); has_key = 1; break;
+            case ES  : exchange(hash, ces, cep, sss, ssp); has_key = 1; break;
+            case SE  : exchange(hash, css, csp, ses, sep); has_key = 1; break;
+            case SS  : exchange(hash, css, csp, sss, ssp); has_key = 1; break;
+            case E   :
+                mix_hash(hash, i%2 == 0 ? client->ep : server->ep, 32);
+                break;
+            case S   :
+                if (has_key) { e_mix_hash(hash, i%2 == 0 ? csp : ssp, 32); }
+                else         {   mix_hash(hash, i%2 == 0 ? csp : ssp, 32); }
+                break;
+            case NOOP: break;
+            default  : assert(0);
+            }
+        }
+        if (has_payload(flags, i)) {
+            if (has_key) { e_mix_hash(hash, pld_in[i], ps[i]); }
+            else         {   mix_hash(hash, pld_in[i], ps[i]); }
+        } else {
+            if (has_key) {
+                static const u8 zero[1] = {0};
+                mix_hash(hash, zero, 1);
+            }
+        }
     }
 
     // Protocol
@@ -117,14 +255,16 @@ static void session(crypto_kex_ctx *client,
     assert(crypto_kex_next_action(server, 0) == CRYPTO_KEX_NONE);
 
     // payload integrity
-//    assert(!has_payload(flags, 0) || !memcmp(pi[0], po[0], ps[0]));
-//    assert(!has_payload(flags, 1) || !memcmp(pi[1], po[1], ps[1]));
-//    assert(!has_payload(flags, 2) || !memcmp(pi[2], po[2], ps[2]));
-//    assert(!has_payload(flags, 3) || !memcmp(pi[3], po[3], ps[3]));
+    assert(nb_msg < 1 || !has_payload(flags, 0) || !memcmp(pi[0],po[0],ps[0]));
+    assert(nb_msg < 2 || !has_payload(flags, 1) || !memcmp(pi[1],po[1],ps[1]));
+    assert(nb_msg < 3 || !has_payload(flags, 2) || !memcmp(pi[2],po[2],ps[2]));
+    assert(nb_msg < 4 || !has_payload(flags, 3) || !memcmp(pi[3],po[3],ps[3]));
 
     // Session keys
-    assert(!memcmp(client_keys.session_key, server_keys.session_key, 32));
-    assert(!memcmp(client_keys.  extra_key, server_keys.  extra_key, 32));
+    assert(!memcmp(hash     , client_keys.session_key, 32));
+    assert(!memcmp(hash     , server_keys.session_key, 32));
+    assert(!memcmp(hash + 32, client_keys.  extra_key, 32));
+    assert(!memcmp(hash + 32, server_keys.  extra_key, 32));
 }
 
 static void xk1_session(unsigned nb)
@@ -136,7 +276,8 @@ static void xk1_session(unsigned nb)
     crypto_kex_ctx client, server;
     crypto_kex_xk1_client_init(&client, client_seed, css, cps, sps);
     crypto_kex_xk1_server_init(&server, server_seed, sss, sps);
-    session(&client, &server, nb);
+    u8 pid[64] = "Monokex XK1";
+    session(&client, &server, pid, nb);
 }
 
 static void x1k1_session(unsigned nb)
@@ -148,7 +289,8 @@ static void x1k1_session(unsigned nb)
     crypto_kex_ctx client, server;
     crypto_kex_x1k1_client_init(&client, client_seed, css, cps, sps);
     crypto_kex_x1k1_server_init(&server, server_seed, sss, sps);
-    session(&client, &server, nb);
+    u8 pid[64] = "Monokex X1K1";
+    session(&client, &server, pid, nb);
 }
 
 static void ix_session(unsigned nb)
@@ -160,7 +302,8 @@ static void ix_session(unsigned nb)
     crypto_kex_ctx client, server;
     crypto_kex_ix_client_init(&client, client_seed, css, cps);
     crypto_kex_ix_server_init(&server, server_seed, sss, sps);
-    session(&client, &server, nb);
+    u8 pid[64] = "Monokex IX";
+    session(&client, &server, pid, nb);
 }
 
 static void nk1_session(unsigned nb)
@@ -171,7 +314,8 @@ static void nk1_session(unsigned nb)
     crypto_kex_ctx client, server;
     crypto_kex_nk1_client_init(&client, client_seed, sps);
     crypto_kex_nk1_server_init(&server, server_seed, sss, sps);
-    session(&client, &server, nb);
+    u8 pid[64] = "Monokex NK1";
+    session(&client, &server, pid, nb);
 }
 
 static void x_session(unsigned nb)
@@ -182,7 +326,8 @@ static void x_session(unsigned nb)
     crypto_kex_ctx client, server;
     crypto_kex_x_client_init(&client, client_seed, css, cps, sps);
     crypto_kex_x_server_init(&server, sss, sps);
-    session(&client, &server, nb);
+    u8 pid[64] = "Monokex X";
+    session(&client, &server, pid, nb);
 }
 
 int main()
