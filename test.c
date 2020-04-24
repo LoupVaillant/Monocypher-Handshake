@@ -30,7 +30,7 @@ static void p_random(u8 *stream, size_t size)
 }
 
 // Context status flags
-static const u16 IS_OK       =  1; // Allways 1 (becomes zero when wiped)
+static const u16 IS_OK       =  1; // Always 1 (becomes zero when wiped)
 static const u16 HAS_REMOTE  =  4; // True if we have the remote DH key
 static const u16 GETS_REMOTE =  8; // True if the remote key is wanted
 
