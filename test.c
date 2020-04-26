@@ -90,7 +90,6 @@ static void load_pattern(action pattern[4][5], const crypto_kex_ctx *ctx)
     }
 }
 
-
 static void mix_hash(u8 hash[64], const u8 *in, u8 size)
 {
     crypto_blake2b_general(hash, 64, hash, 64, in, size);
@@ -126,22 +125,28 @@ static void exchange(u8 hash[64], u8 s1[32], u8 p1[32], u8 s2[32], u8 p2[32])
     mix_hash(hash, t1, 32);
 }
 
-static int has_prelude(unsigned flags)             { return (flags >> 4) & 1; }
-static int has_payload(unsigned flags, unsigned i) { return (flags >> i) & 1; }
+static int has_prelude(unsigned flags)             { return  flags       & 1; }
+static int has_payload(unsigned flags, unsigned i) { return (flags >> i) & 2; }
+
+static size_t nb_messages(const crypto_kex_ctx *ctx)
+{
+    FOR (i, 0, 4) {
+        if (ctx->messages[i] == 0) {
+            return i;
+        }
+    }
+    return 4;
+}
 
 static void session(crypto_kex_ctx *client,
                     crypto_kex_ctx *server,
-                    u8              pid[64],
+                    const u8        pid[64],
                     unsigned        flags)
 {
     // Pattern
     action client_pattern[4][5];  load_pattern(client_pattern, client);
     action server_pattern[4][5];  load_pattern(server_pattern, server);
-    size_t nb_msg;
     FOR (i, 0, 4) {
-        if (client_pattern[i][0] != NOOP) {
-            nb_msg = i + 1;
-        }
         FOR (j, 0, 5) {
             action token = server_pattern[i][j];
             if (token == SE) { server_pattern[i][j] = ES; }
@@ -149,6 +154,7 @@ static void session(crypto_kex_ctx *client,
             assert(client_pattern[i][j] == server_pattern[i][j]);
         }
     }
+    size_t nb_msg = nb_messages(client);
 
     // keys
     int has_cs = server->flags & (HAS_REMOTE | GETS_REMOTE);
@@ -267,7 +273,21 @@ static void session(crypto_kex_ctx *client,
     assert(!memcmp(hash + 32, server_keys.  extra_key, 32));
 }
 
-static void xk1_session(unsigned nb)
+static void sessions(const crypto_kex_ctx *client,
+                     const crypto_kex_ctx *server,
+                     const u8              pid[64])
+{
+    size_t nb_msg   = nb_messages(client);
+    size_t nb_flags = 2 << nb_msg;
+    FOR (i, 0, nb_flags) {
+        crypto_kex_ctx c = *client;
+        crypto_kex_ctx s = *server;
+        session(&c, &s, pid, i);
+    }
+    printf("OK: %s\n", pid);
+}
+
+static void session_xk1()
 {
     RANDOM_INPUT(client_seed, 32);
     RANDOM_INPUT(server_seed, 32);
@@ -277,10 +297,10 @@ static void xk1_session(unsigned nb)
     crypto_kex_xk1_client_init(&client, client_seed, css, cps, sps);
     crypto_kex_xk1_server_init(&server, server_seed, sss, sps);
     u8 pid[64] = "Monokex XK1";
-    session(&client, &server, pid, nb);
+    sessions(&client, &server, pid);
 }
 
-static void x1k1_session(unsigned nb)
+static void session_x1k1()
 {
     RANDOM_INPUT(client_seed, 32);
     RANDOM_INPUT(server_seed, 32);
@@ -290,10 +310,10 @@ static void x1k1_session(unsigned nb)
     crypto_kex_x1k1_client_init(&client, client_seed, css, cps, sps);
     crypto_kex_x1k1_server_init(&server, server_seed, sss, sps);
     u8 pid[64] = "Monokex X1K1";
-    session(&client, &server, pid, nb);
+    sessions(&client, &server, pid);
 }
 
-static void ix_session(unsigned nb)
+static void session_ix()
 {
     RANDOM_INPUT(client_seed, 32);
     RANDOM_INPUT(server_seed, 32);
@@ -303,10 +323,10 @@ static void ix_session(unsigned nb)
     crypto_kex_ix_client_init(&client, client_seed, css, cps);
     crypto_kex_ix_server_init(&server, server_seed, sss, sps);
     u8 pid[64] = "Monokex IX";
-    session(&client, &server, pid, nb);
+    sessions(&client, &server, pid);
 }
 
-static void nk1_session(unsigned nb)
+static void session_nk1()
 {
     RANDOM_INPUT(client_seed, 32);
     RANDOM_INPUT(server_seed, 32);
@@ -315,10 +335,10 @@ static void nk1_session(unsigned nb)
     crypto_kex_nk1_client_init(&client, client_seed, sps);
     crypto_kex_nk1_server_init(&server, server_seed, sss, sps);
     u8 pid[64] = "Monokex NK1";
-    session(&client, &server, pid, nb);
+    sessions(&client, &server, pid);
 }
 
-static void x_session(unsigned nb)
+static void session_x()
 {
     RANDOM_INPUT(client_seed, 32);
     RANDOM_INPUT(css , 32);  u8 cps[32];  crypto_x25519_public_key(cps, css);
@@ -327,15 +347,15 @@ static void x_session(unsigned nb)
     crypto_kex_x_client_init(&client, client_seed, css, cps, sps);
     crypto_kex_x_server_init(&server, sss, sps);
     u8 pid[64] = "Monokex X";
-    session(&client, &server, pid, nb);
+    sessions(&client, &server, pid);
 }
 
 int main()
 {
-    FOR(i, 0, 32) { xk1_session (i); } printf("xk1  session OK\n");
-    FOR(i, 0, 32) { x1k1_session(i); } printf("x1k1 session OK\n");
-    FOR(i, 0, 32) { ix_session  (i); } printf("ix   session OK\n");
-    FOR(i, 0, 32) { nk1_session (i); } printf("nk1  session OK\n");
-    FOR(i, 0, 32) { x_session   (i); } printf("x    session OK\n");
+    session_xk1();
+    session_x1k1();
+    session_ix();
+    session_nk1();
+    session_x();
     return 0;
 }
