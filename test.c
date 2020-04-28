@@ -279,6 +279,8 @@ static void sessions(const crypto_kex_ctx *client,
 {
     size_t nb_msg   = nb_messages(client);
     size_t nb_flags = 2 << nb_msg;
+    assert(nb_flags >=  4);
+    assert(nb_flags <= 32);
     FOR (i, 0, nb_flags) {
         crypto_kex_ctx c = *client;
         crypto_kex_ctx s = *server;
