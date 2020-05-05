@@ -1,3 +1,6 @@
+#ifndef MONOKEX_H
+#define MONOKEX_H
+
 #include <inttypes.h>
 #include <stddef.h>
 
@@ -214,3 +217,4 @@ void crypto_kex_x_server_init(crypto_kex_ctx *ctx,
                               const uint8_t   server_sk[32],
                               const uint8_t   server_pk[32]);
 
+#endif // MONOKEX_H

@@ -16,14 +16,15 @@ speed: speed.out
 clean:
 	rm -rf *.out *.o
 
-monocypher.o: monocypher.c            monocypher.h
-monokex.o   : monokex.c     monokex.h monocypher.h
-test.o      : test.c        monokex.h monocypher.h
-speed.o     : speed.c       monokex.h monocypher.h
-monokex.o test.o speed.o:
+monocypher.o: monocypher.c                      monocypher.h
+monokex.o   : monokex.c               monokex.h monocypher.h
+test_core.o : test_core.c test_core.h monokex.h monocypher.h
+test.o      : test.c                  monokex.h monocypher.h
+speed.o     : speed.c                 monokex.h monocypher.h
+monokex.o test.o test_core.o speed.o:
 	$(CC) $(CFLAGS) -fPIC -c -o $@ $<
 
-test.out   : test.o  monokex.o monocypher.o
-speed.out  : speed.o monokex.o monocypher.o
+test.out   : test_core.o test.o  monokex.o monocypher.o
+speed.out  : speed.o             monokex.o monocypher.o
 test.out speed.out:
 	$(CC) $(CFLAGS) -fPIC -o $@ $^
