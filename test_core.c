@@ -233,7 +233,7 @@ static void session_vectors(outputs              *out,
                             const inputs         *in,
                             const crypto_kex_ctx *client,
                             const crypto_kex_ctx *server,
-                            const u8              pid[64])
+                            const u8              pattern_id[64])
 {
     // Pattern
     action client_pattern[4][5];  load_pattern(client_pattern, client);
@@ -266,7 +266,7 @@ static void session_vectors(outputs              *out,
 
     // Initial hash
     u8 hash[64];
-    memcpy(hash, pid, 64);
+    memcpy(hash, pattern_id, 64);
     if (server->flags & HAS_REMOTE) {
         assert(!memcmp(client->sp, server->sr, 32));
         crypto_blake2b_general(hash, 64, hash, 64, client->sp, 32);
@@ -365,9 +365,9 @@ static void session(outputs              *co, // client out
     assert(crypto_kex_next_action(&s, 0) == CRYPTO_KEX_NONE);
 }
 
-void sessions(const crypto_kex_ctx *client,
-              const crypto_kex_ctx *server,
-              const u8              pid[64])
+void test_pattern(const crypto_kex_ctx *client,
+                  const crypto_kex_ctx *server,
+                  const u8              pattern_id[64])
 {
     size_t nb_msg   = nb_messages(client);
     size_t nb_flags = 2 << nb_msg;
@@ -377,7 +377,7 @@ void sessions(const crypto_kex_ctx *client,
         // test vectors
         inputs  in;  make_inputs(&in, flags);
         outputs out_vectors;
-        session_vectors(&out_vectors, &in, client, server, pid);
+        session_vectors(&out_vectors, &in, client, server, pattern_id);
 
         // Sucessful session
         outputs out_client;
@@ -455,5 +455,5 @@ void sessions(const crypto_kex_ctx *client,
             }
         }
     }
-    printf("OK: %s\n", pid);
+    printf("OK: %s\n", pattern_id);
 }
