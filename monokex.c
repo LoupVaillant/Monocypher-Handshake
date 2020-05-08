@@ -159,7 +159,12 @@ static void kex_init(crypto_kex_ctx *ctx, const u8 pid[32])
 static void kex_seed(crypto_kex_ctx *ctx, u8 random_seed[32])
 {
     crypto_chacha20(ctx->pool, 0, 64, random_seed, zero);
+#ifndef DISABLE_ELLIGATOR
     crypto_hidden_key_pair(ctx->ep, ctx->e, ctx->pool + 32);
+#else
+    copy(ctx->e, ctx->pool + 32, 32);
+    crypto_x25519_public_key(ctx->ep, ctx->e);
+#endif
     // The first half of the pool will later generate the next pool
     crypto_wipe(random_seed, 32);
 }
@@ -205,7 +210,10 @@ int crypto_kex_read_p(crypto_kex_ctx *ctx,
         switch (kex_next_token(ctx)) {
         case E : kex_read_raw(ctx, ctx->er, m, 32);
                  m += 32;
-                 crypto_hidden_to_curve(ctx->er, ctx->er);     break;
+#ifndef DISABLE_ELLIGATOR
+                 crypto_hidden_to_curve(ctx->er, ctx->er);
+#endif
+                 break;
         case S : if (kex_read(ctx, ctx->sr, m, 32)) { return -1; }
                  m += 32 + tag_size;
                  ctx->flags |= HAS_REMOTE;                     break;
