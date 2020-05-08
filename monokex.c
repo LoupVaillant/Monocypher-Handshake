@@ -4,7 +4,7 @@
 /////////////////
 /// Utilities ///
 /////////////////
-#define FOR(i, start, end)  for (size_t (i) = (start); (i) < (end); (i)++)
+#define FOR(i, start, end)  for (size_t i = (start); (i) < (end); (i)++)
 #define WIPE_CTX(ctx)       crypto_wipe(ctx   , sizeof(*(ctx)))
 #define WIPE_BUFFER(buffer) crypto_wipe(buffer, sizeof(buffer))
 

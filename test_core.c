@@ -9,7 +9,7 @@ typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint64_t u64;
 
-#define FOR(i, start, end) for (size_t (i) = (start); (i) < (end); (i)++)
+#define FOR(i, start, end) for (size_t i = (start); (i) < (end); (i)++)
 
 // Pseudo-random 64 bit number, based on xorshift*
 static u64 rand64()
@@ -74,7 +74,7 @@ static void make_inputs(inputs *in, unsigned flags)
         in->prelude_size = 0;
     }
     FOR (i, 0, 4) {
-        if (has_payload(flags, i)) {
+        if (has_payload(flags, (unsigned)i)) {
             size_t size = rand64() % 32;
             p_random(in->payload_bufs[i], size);
             in->payloads     [i] = in->payload_bufs[i];
@@ -101,7 +101,7 @@ static network clean_network()
     return corrupt_network((size_t)-1, 0, 0);
 }
 
-void network_read(network *n, u8 *buf, size_t size)
+static void network_read(network *n, u8 *buf, size_t size)
 {
     if (n->size != 0) {
         assert(n->size == size); // only read exactly what has been written
@@ -113,7 +113,7 @@ void network_read(network *n, u8 *buf, size_t size)
     }
 }
 
-void network_write(network *n, const u8 *buf, size_t size)
+static void network_write(network *n, const u8 *buf, size_t size)
 {
     assert(n->size == 0);
     assert(size <= sizeof(n->buf)); // just so we don't overflow the network
@@ -167,8 +167,10 @@ static size_t step(crypto_kex_ctx *ctx, outputs *out,
             crypto_kex_final(ctx, out->session_key, out->extra_key);
             assert(ctx->flags == 0);
             break;
-        default:
+        case CRYPTO_KEX_NONE:
             break;
+        default:
+            assert(0);
         }
         action = crypto_kex_next_action(ctx, &m_size);
     } while (action != CRYPTO_KEX_NONE &&
@@ -187,7 +189,7 @@ static void load_pattern(action pattern[4][5], const crypto_kex_ctx *ctx)
     }
 }
 
-static void mix_hash(u8 hash[64], const u8 *in, u8 size)
+static void mix_hash(u8 hash[64], const u8 *in, size_t size)
 {
     crypto_blake2b_general(hash, 64, hash, 64, in, size);
 }
@@ -202,7 +204,7 @@ static void split_hash(u8 hash[64], u8 *extra, size_t size)
     memcpy(extra, tmp, size);
 }
 
-static void e_mix_hash(u8 hash[64], const u8 *in, u8 size)
+static void e_mix_hash(u8 hash[64], const u8 *in, size_t size)
 {
     static const u8 zero[8] = {0};
     u8 key[32];
@@ -419,12 +421,12 @@ void test_pattern(const crypto_kex_ctx *client,
                   const u8              pattern_id[64])
 {
     size_t nb_msg   = nb_messages(client);
-    size_t nb_flags = 2 << nb_msg;
+    size_t nb_flags = (size_t)2 << nb_msg;
     assert(nb_flags >=  4);
     assert(nb_flags <= 32);
     FOR (flags, 0, nb_flags) {
         // test vectors
-        inputs  in;  make_inputs(&in, flags);
+        inputs  in;  make_inputs(&in, (unsigned)flags);
         outputs vectors;
         size_t  msg_sizes[5];     // size of each message in a session
         u8      payloads [4][32]; // transmitted payloads
