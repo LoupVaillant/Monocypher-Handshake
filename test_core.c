@@ -44,7 +44,7 @@ typedef struct {
 } outputs;
 
 typedef struct {
-    u8     buf[128];     // maximum message size
+    u8     buf[256];     // maximum message size
     size_t size;         // how many bytes in the buffer
     size_t corrupt_in;   // if 0, corrupt next message
     size_t corrupt_at;   // byte to corrupt
@@ -116,7 +116,7 @@ void network_read(network *n, u8 *buf, size_t size)
 void network_write(network *n, const u8 *buf, size_t size)
 {
     assert(n->size == 0);
-    assert(size <= 128); // just so we don't overflow the network
+    assert(size <= sizeof(n->buf)); // just so we don't overflow the network
     memcpy(n->buf, buf, size);
     n->size = size;
     if (n->corrupt_in == 0) {
@@ -129,7 +129,8 @@ void network_write(network *n, const u8 *buf, size_t size)
 static size_t step(crypto_kex_ctx *ctx, outputs *out,
                    network  *net,
                    u8       *p_out, size_t p_osize,
-                   const u8 *p_in , size_t p_isize)
+                   const u8 *p_in , size_t p_isize,
+                   size_t    padding)
 {
     crypto_kex_action action;
     size_t m_size;
@@ -139,9 +140,10 @@ static size_t step(crypto_kex_ctx *ctx, outputs *out,
         switch (action) {
         case CRYPTO_KEX_READ: {
             assert(ctx->flags & IS_OK);
-            u8 m_in[128];
-            network_read(net, m_in, m_size + p_osize);
-            int ko = crypto_kex_read_p(ctx,p_out,p_osize,m_in,m_size+p_osize);
+            u8 m_in[256];
+            size_t read_size = m_size + p_osize + padding;
+            network_read(net, m_in, read_size);
+            int ko = crypto_kex_read_p(ctx, p_out, p_osize, m_in, read_size);
             if (ko) {
                 assert(!(ctx->flags & IS_OK));
                 return (size_t)-1; // protocol failure
@@ -150,9 +152,10 @@ static size_t step(crypto_kex_ctx *ctx, outputs *out,
             }
         } break;
         case CRYPTO_KEX_WRITE: {
-            u8 m_out[128];
-            crypto_kex_write_p(ctx, m_out, m_size + p_isize, p_in, p_isize);
-            network_write(net, m_out, m_size + p_isize);
+            u8 m_out[256];
+            size_t write_size = m_size + p_isize + padding;
+            crypto_kex_write_p(ctx, m_out, write_size, p_in, p_isize);
+            network_write(net, m_out, write_size);
             assert(ctx->flags & IS_OK);
             message_size = m_size + p_isize;
         } break;
@@ -329,7 +332,8 @@ static void session(outputs              *co, // client out
                     network              *net,
                     const inputs         *in,
                     const crypto_kex_ctx *client,
-                    const crypto_kex_ctx *server)
+                    const crypto_kex_ctx *server,
+                    size_t                padding)
 {
     crypto_kex_ctx c = *client;
     crypto_kex_ctx s = *server;
@@ -355,15 +359,60 @@ static void session(outputs              *co, // client out
         }
     }
 
-    msg_sizes[0] = step(&c, co, net, 0    , 0    , pi[0], ps[0]);
-    msg_sizes[1] = step(&s, so, net, po[0], ps[0], pi[1], ps[1]);
-    msg_sizes[2] = step(&c, co, net, po[1], ps[1], pi[2], ps[2]);
-    msg_sizes[3] = step(&s, so, net, po[2], ps[2], pi[3], ps[3]);
-    msg_sizes[4] = step(&c, co, net, po[3], ps[3], 0    , 0    );
+    msg_sizes[0] = step(&c, co, net, 0    , 0    , pi[0], ps[0], padding);
+    msg_sizes[1] = step(&s, so, net, po[0], ps[0], pi[1], ps[1], padding);
+    msg_sizes[2] = step(&c, co, net, po[1], ps[1], pi[2], ps[2], padding);
+    msg_sizes[3] = step(&s, so, net, po[2], ps[2], pi[3], ps[3], padding);
+    msg_sizes[4] = step(&c, co, net, po[3], ps[3], 0    , 0    , padding);
 
     assert(crypto_kex_next_action(&c, 0) == CRYPTO_KEX_NONE);
     assert(crypto_kex_next_action(&s, 0) == CRYPTO_KEX_NONE);
 }
+
+static void session_success(size_t msg_sizes[5],     // actual message sizes
+                            u8     payloads [4][32], // transmitted payloads
+                            const crypto_kex_ctx *client,
+                            const crypto_kex_ctx *server,
+                            const inputs         *in,
+                            const outputs        *vectors,
+                            size_t padding)
+{
+    // Sucessful session
+    outputs out_client;
+    outputs out_server;
+    network net = clean_network();
+    session(&out_client, &out_server, payloads, msg_sizes, &net,
+            in, client, server, padding);
+
+    // No error after sucessful session
+    FOR (i, 0, 5) {
+        assert(msg_sizes[i] != ((size_t)-1));
+    }
+    assert(msg_sizes[4] == 0); // there is no message 4
+    // Sucessful session faithfully transmits payloads
+    size_t nb_msg = nb_messages(client);
+    FOR (i, 0, nb_msg) {
+        if (in->payloads[i]) {
+            assert(!memcmp(payloads         [i],
+                           in->payloads     [i],
+                           in->payload_sizes[i]));
+        }
+    }
+    // Sucessful session faithfully transmits the remote key
+    if (client->flags & GETS_REMOTE) {
+        assert(!memcmp(server->sp, out_client.remote_key, 32));
+    }
+    if (server->flags & GETS_REMOTE) {
+        assert(!memcmp(client->sp, out_server.remote_key, 32));
+    }
+    // Sucessful session agrees with the test vectors
+    assert(!memcmp(out_client.session_key, vectors->session_key, 32));
+    assert(!memcmp(out_server.session_key, vectors->session_key, 32));
+    assert(!memcmp(out_client.  extra_key, vectors->  extra_key, 32));
+    assert(!memcmp(out_server.  extra_key, vectors->  extra_key, 32));
+
+}
+
 
 void test_pattern(const crypto_kex_ctx *client,
                   const crypto_kex_ctx *server,
@@ -376,44 +425,12 @@ void test_pattern(const crypto_kex_ctx *client,
     FOR (flags, 0, nb_flags) {
         // test vectors
         inputs  in;  make_inputs(&in, flags);
-        outputs out_vectors;
-        session_vectors(&out_vectors, &in, client, server, pattern_id);
-
-        // Sucessful session
-        outputs out_client;
-        outputs out_server;
-        u8      payloads [4][32]; // transmitted payloads
+        outputs vectors;
         size_t  msg_sizes[5];     // size of each message in a session
-        network net = clean_network();
-        session(&out_client, &out_server, payloads, msg_sizes, &net,
-                &in, client, server);
-
-        // No error after sucessful session
-        FOR (i, 0, 5) {
-            assert(msg_sizes[i] != ((size_t)-1));
-        }
-        assert(msg_sizes[4] == 0); // there is no message 4
-        // Sucessful session faithfully transmits payloads
-        size_t nb_msg = nb_messages(client);
-        FOR (i, 0, nb_msg) {
-            if (in.payloads[i]) {
-                assert(!memcmp(payloads        [i],
-                               in.payloads     [i],
-                               in.payload_sizes[i]));
-            }
-        }
-        // Sucessful session faithfully transmits the remote key
-        if (client->flags & GETS_REMOTE) {
-            assert(!memcmp(server->sp, out_client.remote_key, 32));
-        }
-        if (server->flags & GETS_REMOTE) {
-            assert(!memcmp(client->sp, out_server.remote_key, 32));
-        }
-        // Sucessful session agrees with the test vectors
-        assert(!memcmp(out_client.session_key, out_vectors.session_key, 32));
-        assert(!memcmp(out_server.session_key, out_vectors.session_key, 32));
-        assert(!memcmp(out_client.  extra_key, out_vectors.  extra_key, 32));
-        assert(!memcmp(out_server.  extra_key, out_vectors.  extra_key, 32));
+        u8      payloads [4][32]; // transmitted payloads
+        session_vectors(&vectors, &in, client, server, pattern_id);
+        session_success(msg_sizes, payloads, client, server, &in, &vectors, 128);
+        session_success(msg_sizes, payloads, client, server, &in, &vectors,   0);
 
         // Failing sessions (network corruption)
         FOR (i, 0, 4) {
@@ -441,10 +458,12 @@ void test_pattern(const crypto_kex_ctx *client,
                 if (corrupt_at >= msg_sizes[i]) {
                     corrupt_at = msg_sizes[i] - 1;
                 }
+                outputs out_client;
+                outputs out_server;
                 size_t  corrupt_sizes[5];
                 network net = corrupt_network(i, corrupt_at, corrupt_with);
                 session(&out_client, &out_server, payloads, corrupt_sizes, &net,
-                        &in, client, server);
+                        &in, client, server, 0);
                 // Check that the session failed visibly.
                 int ko = 0;
                 FOR (j, 0, 5) {
