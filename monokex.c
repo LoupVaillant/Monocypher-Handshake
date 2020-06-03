@@ -334,6 +334,960 @@ crypto_kex_action crypto_kex_next_action(const crypto_kex_ctx *ctx,
         :                             CRYPTO_KEX_READ;
 }
 
+/////////
+/// N ///
+/////////
+static const u8 pid_n[64] = "Monokex N";
+
+void crypto_kex_n_client_init(crypto_kex_ctx *ctx,
+                              u8              random_seed[32],
+                              const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_n);
+    kex_seed    (ctx, random_seed);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (ES << 3);
+    ctx->messages[1] = 0;
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_n_server_init(crypto_kex_ctx *ctx,
+                              const u8        server_sk[32],
+                              const u8        server_pk[32])
+{
+    kex_init    (ctx, pid_n);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->messages[0] = E + (SE << 3);
+    ctx->messages[1] = 0;
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+/////////
+/// K ///
+/////////
+static const u8 pid_k[64] = "Monokex K";
+
+void crypto_kex_k_client_init(crypto_kex_ctx *ctx,
+                              u8              random_seed[32],
+                              const u8        client_sk  [32],
+                              const u8        client_pk  [32],
+                              const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_k);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (ES << 3) + (SS << 6);
+    ctx->messages[1] = 0;
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_k_server_init(crypto_kex_ctx *ctx,
+                              const u8        server_sk[32],
+                              const u8        server_pk[32],
+                              const u8        client_pk[32])
+{
+    kex_init    (ctx, pid_k);
+    kex_locals  (ctx, server_sk, server_pk);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E + (SE << 3) + (SS << 6);
+    ctx->messages[1] = 0;
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+/////////
+/// X ///
+/////////
+static const u8 pid_x[64] = "Monokex X";
+
+void crypto_kex_x_client_init(crypto_kex_ctx *ctx,
+                              u8              random_seed[32],
+                              const u8        client_sk  [32],
+                              const u8        client_pk  [32],
+                              const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_x);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (ES << 3) + (S << 6) + (SS << 9);
+    ctx->messages[1] = 0;
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_x_server_init(crypto_kex_ctx *ctx,
+                              const u8        server_sk[32],
+                              const u8        server_pk[32])
+{
+    kex_init    (ctx, pid_x);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (SE << 3) + (S << 6) + (SS << 9);
+    ctx->messages[1] = 0;
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+//////////
+/// NN ///
+//////////
+static const u8 pid_nn[64] = "Monokex NN";
+
+void crypto_kex_nn_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32])
+{
+    kex_init    (ctx, pid_nn);
+    kex_seed    (ctx, random_seed);
+    ctx->flags |= SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_nn_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32])
+{
+    kex_init    (ctx, pid_nn);
+    kex_seed    (ctx, random_seed);
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+//////////
+/// NK ///
+//////////
+static const u8 pid_nk[64] = "Monokex NK";
+
+void crypto_kex_nk_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_nk);
+    kex_seed    (ctx, random_seed);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (ES << 3);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_nk_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        server_sk  [32],
+                               const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_nk);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->messages[0] = E + (SE << 3);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+//////////
+/// NX ///
+//////////
+static const u8 pid_nx[64] = "Monokex NX";
+
+void crypto_kex_nx_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32])
+{
+    kex_init    (ctx, pid_nx);
+    kex_seed    (ctx, random_seed);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6) + (ES << 9);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_nx_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        server_sk  [32],
+                               const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_nx);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6) + (SE << 9);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+//////////
+/// KN ///
+//////////
+static const u8 pid_kn[64] = "Monokex KN";
+
+void crypto_kex_kn_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_sk  [32],
+                               const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_kn);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+void crypto_kex_kn_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_kn);
+    kex_seed    (ctx, random_seed);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (ES << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+//////////
+/// KK ///
+//////////
+static const u8 pid_kk[64] = "Monokex KK";
+
+void crypto_kex_kk_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_sk  [32],
+                               const u8        client_pk  [32],
+                               const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_kk);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (ES << 3) + (SS << 6);
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_kk_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        server_sk  [32],
+                               const u8        server_pk  [32],
+                               const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_kk);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E + (SE << 3) + (SS << 6);
+    ctx->messages[1] = E + (EE << 3) + (ES << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+//////////
+/// KX ///
+//////////
+static const u8 pid_kx[64] = "Monokex KX";
+
+void crypto_kex_kx_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_sk  [32],
+                               const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_kx);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6) + (S << 9) + (ES << 12);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+void crypto_kex_kx_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        server_sk  [32],
+                               const u8        server_pk  [32],
+                               const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_kx);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (ES << 6) + (S << 9) + (SE << 12);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+//////////
+/// XN ///
+//////////
+static const u8 pid_xn[64] = "Monokex XN";
+
+void crypto_kex_xn_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_sk  [32],
+                               const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_xn);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = S + (SE << 3);
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_xn_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32])
+{
+    kex_init    (ctx, pid_xn);
+    kex_seed    (ctx, random_seed);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = S + (ES << 3);
+    ctx->messages[3] = 0;
+}
+
+//////////
+/// XK ///
+//////////
+static const u8 pid_xk[64] = "Monokex XK";
+
+void crypto_kex_xk_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_sk  [32],
+                               const u8        client_pk  [32],
+                               const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_xk);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (ES << 3);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = S + (SE << 3);
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_xk_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        server_sk  [32],
+                               const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_xk);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (SE << 3);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = S + (ES << 3);
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+//////////
+/// XX ///
+//////////
+static const u8 pid_xx[64] = "Monokex XX";
+
+void crypto_kex_xx_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_sk  [32],
+                               const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_xx);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6) + (ES << 9);
+    ctx->messages[2] = S + (SE << 3);
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_xx_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        server_sk  [32],
+                               const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_xx);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6) + (SE << 9);
+    ctx->messages[2] = S + (ES << 3);
+    ctx->messages[3] = 0;
+}
+
+//////////
+/// IN ///
+//////////
+static const u8 pid_in[64] = "Monokex IN";
+
+void crypto_kex_in_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_sk  [32],
+                               const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_in);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= SHOULD_SEND;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_in_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32])
+{
+    kex_init    (ctx, pid_in);
+    kex_seed    (ctx, random_seed);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (ES << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+//////////
+/// IK ///
+//////////
+static const u8 pid_ik[64] = "Monokex IK";
+
+void crypto_kex_ik_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_sk  [32],
+                               const u8        client_pk  [32],
+                               const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_ik);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (ES << 3) + (S << 6) + (SS << 9);
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_ik_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        server_sk  [32],
+                               const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_ik);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (SE << 3) + (S << 6) + (SS << 9);
+    ctx->messages[1] = E + (EE << 3) + (ES << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+//////////
+/// IX ///
+//////////
+static const u8 pid_ix[64] = "Monokex IX";
+
+void crypto_kex_ix_client_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        client_sk  [32],
+                               const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_ix);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (SE << 6) + (S << 9) + (ES << 12);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_ix_server_init(crypto_kex_ctx *ctx,
+                               u8              random_seed[32],
+                               const u8        server_sk  [32],
+                               const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_ix);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (ES << 6) + (S << 9) + (SE << 12);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+}
+
+///////////
+/// NK1 ///
+///////////
+static const u8 pid_nk1[64] = "Monokex NK1";
+
+void crypto_kex_nk1_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_nk1);
+    kex_seed    (ctx, random_seed);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (ES << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_nk1_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_nk1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+///////////
+/// NX1 ///
+///////////
+static const u8 pid_nx1[64] = "Monokex NX1";
+
+void crypto_kex_nx1_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32])
+{
+    kex_init    (ctx, pid_nx1);
+    kex_seed    (ctx, random_seed);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_nx1_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_nx1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+}
+
+///////////
+/// K1N ///
+///////////
+static const u8 pid_k1n[64] = "Monokex K1N";
+
+void crypto_kex_k1n_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_k1n);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+void crypto_kex_k1n_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_k1n);
+    kex_seed    (ctx, random_seed);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+///////////
+/// K1K ///
+///////////
+static const u8 pid_k1k[64] = "Monokex K1K";
+
+void crypto_kex_k1k_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_k1k);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (ES << 3);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_k1k_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_k1k);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E + (SE << 3);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+///////////
+/// KK1 ///
+///////////
+static const u8 pid_kk1[64] = "Monokex KK1";
+
+void crypto_kex_kk1_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_kk1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6) + (ES << 9);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_kk1_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_kk1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (ES << 6) + (SE << 9);
+    ctx->messages[2] = 0;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+////////////
+/// K1K1 ///
+////////////
+static const u8 pid_k1k1[64] = "Monokex K1K1";
+
+void crypto_kex_k1k1_client_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        client_sk  [32],
+                                 const u8        client_pk  [32],
+                                 const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_k1k1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (ES << 6);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_k1k1_server_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        server_sk  [32],
+                                 const u8        server_pk  [32],
+                                 const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_k1k1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+///////////
+/// K1X ///
+///////////
+static const u8 pid_k1x[64] = "Monokex K1X";
+
+void crypto_kex_k1x_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_k1x);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6) + (ES << 9);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+void crypto_kex_k1x_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_k1x);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6) + (SE << 9);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+///////////
+/// KX1 ///
+///////////
+static const u8 pid_kx1[64] = "Monokex KX1";
+
+void crypto_kex_kx1_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_kx1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (SE << 6) + (S << 9);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+void crypto_kex_kx1_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_kx1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (ES << 6) + (S << 9);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+////////////
+/// K1X1 ///
+////////////
+static const u8 pid_k1x1[64] = "Monokex K1X1";
+
+void crypto_kex_k1x1_client_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        client_sk  [32],
+                                 const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_k1x1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6);
+    ctx->messages[2] = SE + (ES << 3);
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+void crypto_kex_k1x1_server_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        server_sk  [32],
+                                 const u8        server_pk  [32],
+                                 const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_k1x1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    copy(ctx->sr, client_pk, 32);
+    ctx->flags |= HAS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6);
+    ctx->messages[2] = ES + (SE << 3);
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+///////////
+/// X1N ///
+///////////
+static const u8 pid_x1n[64] = "Monokex X1N";
+
+void crypto_kex_x1n_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_x1n);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = S;
+    ctx->messages[3] = SE;
+}
+
+void crypto_kex_x1n_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32])
+{
+    kex_init    (ctx, pid_x1n);
+    kex_seed    (ctx, random_seed);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = S;
+    ctx->messages[3] = ES;
+}
+
+///////////
+/// X1K ///
+///////////
+static const u8 pid_x1k[64] = "Monokex X1K";
+
+void crypto_kex_x1k_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_x1k);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (ES << 3);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = S;
+    ctx->messages[3] = SE;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_x1k_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_x1k);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (SE << 3);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = S;
+    ctx->messages[3] = ES;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
 ///////////
 /// XK1 ///
 ///////////
@@ -412,110 +1366,362 @@ void crypto_kex_x1k1_server_init(crypto_kex_ctx *ctx,
     kex_mix_hash(ctx, ctx->sp, 32);
 }
 
-//////////
-/// IX ///
-//////////
-static const u8 pid_ix[64] = "Monokex IX";
+///////////
+/// X1X ///
+///////////
+static const u8 pid_x1x[64] = "Monokex X1X";
 
-void crypto_kex_ix_client_init(crypto_kex_ctx *ctx,
-                               u8              random_seed[32],
-                               const u8        client_sk  [32],
-                               const u8        client_pk  [32])
+void crypto_kex_x1x_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32])
 {
-    kex_init    (ctx, pid_ix);
+    kex_init    (ctx, pid_x1x);
     kex_seed    (ctx, random_seed);
     kex_locals  (ctx, client_sk, client_pk);
     ctx->flags |= GETS_REMOTE | SHOULD_SEND;
-    ctx->messages[0] = E + (S << 3);
-    ctx->messages[1] = E + (EE << 3) + (SE << 6) + (S << 9) + (ES << 12);
-    ctx->messages[2] = 0;
-    ctx->messages[3] = 0;
-}
-
-void crypto_kex_ix_server_init(crypto_kex_ctx *ctx,
-                               u8              random_seed[32],
-                               const u8        server_sk  [32],
-                               const u8        server_pk  [32])
-{
-    kex_init    (ctx, pid_ix);
-    kex_seed    (ctx, random_seed);
-    kex_locals  (ctx, server_sk, server_pk);
-    ctx->flags |= GETS_REMOTE;
-    ctx->messages[0] = E + (S << 3);
-    ctx->messages[1] = E + (EE << 3) + (ES << 6) + (S << 9) + (SE << 12);
-    ctx->messages[2] = 0;
-    ctx->messages[3] = 0;
-}
-
-///////////
-/// NK1 ///
-///////////
-static const u8 pid_nk1[64] = "Monokex NK1";
-
-void crypto_kex_nk1_client_init(crypto_kex_ctx *ctx,
-                                u8              random_seed[32],
-                                const u8        server_pk  [32])
-{
-    kex_init    (ctx, pid_nk1);
-    kex_seed    (ctx, random_seed);
-    copy(ctx->sr, server_pk, 32);
-    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
     ctx->messages[0] = E;
-    ctx->messages[1] = E + (EE << 3) + (ES << 6);
-    ctx->messages[2] = 0;
-    ctx->messages[3] = 0;
-    kex_mix_hash(ctx, ctx->sr, 32);
+    ctx->messages[1] = E + (EE << 3) + (S << 6) + (ES << 9);
+    ctx->messages[2] = S;
+    ctx->messages[3] = SE;
 }
 
-void crypto_kex_nk1_server_init(crypto_kex_ctx *ctx,
+void crypto_kex_x1x_server_init(crypto_kex_ctx *ctx,
                                 u8              random_seed[32],
                                 const u8        server_sk  [32],
                                 const u8        server_pk  [32])
 {
-    kex_init    (ctx, pid_nk1);
+    kex_init    (ctx, pid_x1x);
     kex_seed    (ctx, random_seed);
     kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
     ctx->messages[0] = E;
-    ctx->messages[1] = E + (EE << 3) + (SE << 6);
-    ctx->messages[2] = 0;
-    ctx->messages[3] = 0;
-    kex_mix_hash(ctx, ctx->sp, 32);
+    ctx->messages[1] = E + (EE << 3) + (S << 6) + (SE << 9);
+    ctx->messages[2] = S;
+    ctx->messages[3] = ES;
 }
 
-/////////
-/// X ///
-/////////
-static const u8 pid_x[64] = "Monokex X";
+///////////
+/// XX1 ///
+///////////
+static const u8 pid_xx1[64] = "Monokex XX1";
 
-void crypto_kex_x_client_init(crypto_kex_ctx *ctx,
-                              u8              random_seed[32],
-                              const u8        client_sk  [32],
-                              const u8        client_pk  [32],
-                              const u8        server_pk  [32])
+void crypto_kex_xx1_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32])
 {
-    kex_init    (ctx, pid_x);
+    kex_init    (ctx, pid_xx1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6);
+    ctx->messages[2] = ES + (S << 3) + (SE << 6);
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_xx1_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_xx1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6);
+    ctx->messages[2] = SE + (S << 3) + (ES << 6);
+    ctx->messages[3] = 0;
+}
+
+////////////
+/// X1X1 ///
+////////////
+static const u8 pid_x1x1[64] = "Monokex X1X1";
+
+void crypto_kex_x1x1_client_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        client_sk  [32],
+                                 const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_x1x1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6);
+    ctx->messages[2] = ES + (S << 3);
+    ctx->messages[3] = SE;
+}
+
+void crypto_kex_x1x1_server_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        server_sk  [32],
+                                 const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_x1x1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E;
+    ctx->messages[1] = E + (EE << 3) + (S << 6);
+    ctx->messages[2] = SE + (S << 3);
+    ctx->messages[3] = ES;
+}
+
+///////////
+/// I1N ///
+///////////
+static const u8 pid_i1n[64] = "Monokex I1N";
+
+void crypto_kex_i1n_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_i1n);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= SHOULD_SEND;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_i1n_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32])
+{
+    kex_init    (ctx, pid_i1n);
+    kex_seed    (ctx, random_seed);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+}
+
+///////////
+/// I1K ///
+///////////
+static const u8 pid_i1k[64] = "Monokex I1K";
+
+void crypto_kex_i1k_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_i1k);
     kex_seed    (ctx, random_seed);
     kex_locals  (ctx, client_sk, client_pk);
     copy(ctx->sr, server_pk, 32);
     ctx->flags |= HAS_REMOTE | SHOULD_SEND;
-    ctx->messages[0] = E + (ES << 3) + (S << 6) + (SS << 9);
-    ctx->messages[1] = 0;
+    ctx->messages[0] = E + (ES << 3) + (S << 6);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_i1k_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_i1k);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (SE << 3) + (S << 6);
+    ctx->messages[1] = E + (EE << 3);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+///////////
+/// IK1 ///
+///////////
+static const u8 pid_ik1[64] = "Monokex IK1";
+
+void crypto_kex_ik1_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_ik1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (SE << 6) + (ES << 9);
     ctx->messages[2] = 0;
     ctx->messages[3] = 0;
     kex_mix_hash(ctx, ctx->sr, 32);
 }
 
-void crypto_kex_x_server_init(crypto_kex_ctx *ctx,
-                              const u8        server_sk[32],
-                              const u8        server_pk[32])
+void crypto_kex_ik1_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32])
 {
-    kex_init    (ctx, pid_x);
+    kex_init    (ctx, pid_ik1);
+    kex_seed    (ctx, random_seed);
     kex_locals  (ctx, server_sk, server_pk);
     ctx->flags |= GETS_REMOTE;
-    ctx->messages[0] = E + (SE << 3) + (S << 6) + (SS << 9);
-    ctx->messages[1] = 0;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (ES << 6) + (SE << 9);
     ctx->messages[2] = 0;
     ctx->messages[3] = 0;
     kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+////////////
+/// I1K1 ///
+////////////
+static const u8 pid_i1k1[64] = "Monokex I1K1";
+
+void crypto_kex_i1k1_client_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        client_sk  [32],
+                                 const u8        client_pk  [32],
+                                 const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_i1k1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    copy(ctx->sr, server_pk, 32);
+    ctx->flags |= HAS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (ES << 6);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sr, 32);
+}
+
+void crypto_kex_i1k1_server_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        server_sk  [32],
+                                 const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_i1k1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (SE << 6);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+    kex_mix_hash(ctx, ctx->sp, 32);
+}
+
+///////////
+/// I1X ///
+///////////
+static const u8 pid_i1x[64] = "Monokex I1X";
+
+void crypto_kex_i1x_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_i1x);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (S << 6) + (ES << 9);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_i1x_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_i1x);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (S << 6) + (SE << 9);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+}
+
+///////////
+/// IX1 ///
+///////////
+static const u8 pid_ix1[64] = "Monokex IX1";
+
+void crypto_kex_ix1_client_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        client_sk  [32],
+                                const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_ix1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (SE << 6) + (S << 9);
+    ctx->messages[2] = ES;
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_ix1_server_init(crypto_kex_ctx *ctx,
+                                u8              random_seed[32],
+                                const u8        server_sk  [32],
+                                const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_ix1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (ES << 6) + (S << 9);
+    ctx->messages[2] = SE;
+    ctx->messages[3] = 0;
+}
+
+////////////
+/// I1X1 ///
+////////////
+static const u8 pid_i1x1[64] = "Monokex I1X1";
+
+void crypto_kex_i1x1_client_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        client_sk  [32],
+                                 const u8        client_pk  [32])
+{
+    kex_init    (ctx, pid_i1x1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, client_sk, client_pk);
+    ctx->flags |= GETS_REMOTE | SHOULD_SEND;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (S << 6);
+    ctx->messages[2] = SE + (ES << 3);
+    ctx->messages[3] = 0;
+}
+
+void crypto_kex_i1x1_server_init(crypto_kex_ctx *ctx,
+                                 u8              random_seed[32],
+                                 const u8        server_sk  [32],
+                                 const u8        server_pk  [32])
+{
+    kex_init    (ctx, pid_i1x1);
+    kex_seed    (ctx, random_seed);
+    kex_locals  (ctx, server_sk, server_pk);
+    ctx->flags |= GETS_REMOTE;
+    ctx->messages[0] = E + (S << 3);
+    ctx->messages[1] = E + (EE << 3) + (S << 6);
+    ctx->messages[2] = ES + (SE << 3);
+    ctx->messages[3] = 0;
 }
 
