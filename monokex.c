@@ -13,8 +13,9 @@ typedef uint16_t u16;
 
 // Message token bytecode
 typedef enum { E=1, S=2, EE=3, ES=4, SE=5, SS=6 } action;
-static int is_key     (unsigned i) { return i <= S;  }
-static int is_exchange(unsigned i) { return i >= EE; }
+static int is_ephemeral(unsigned i) { return i == E;  }
+static int is_static   (unsigned i) { return i == S;  }
+static int is_exchange (unsigned i) { return i >= EE; }
 
 // Context status flags
 static const u16 IS_OK       =  1; // Allways 1 (becomes zero when wiped)
@@ -315,8 +316,9 @@ crypto_kex_action crypto_kex_next_action(const crypto_kex_ctx *ctx,
         uint16_t message = ctx->messages[0];
         size_t   size    = 0;
         while (message != 0) {
-            if (is_exchange(message & 7)) { has_key = 16;         }
-            if (is_key     (message & 7)) { size += 32 + has_key; }
+            if (is_ephemeral(message & 7)) { size += 32;           }
+            if (is_static   (message & 7)) { size += 32 + has_key; }
+            if (is_exchange (message & 7)) { has_key = 16;         }
             message >>= 3;
         }
         *next_message_size = size + has_key;
