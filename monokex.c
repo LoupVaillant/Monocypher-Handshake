@@ -158,15 +158,16 @@ static void kex_init(crypto_kex_ctx *ctx, const u8 pid[32])
 
 static void kex_seed(crypto_kex_ctx *ctx, u8 random_seed[32])
 {
+    // Note we only use the second half of the pool for now.
+    // The first half will be used later to re-generate the pool.
     crypto_chacha20(ctx->pool, 0, 64, random_seed, zero);
+    crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
 #ifndef DISABLE_ELLIGATOR
     crypto_hidden_key_pair(ctx->ep, ctx->e, ctx->pool + 32);
 #else
     copy(ctx->e, ctx->pool + 32, 32);
     crypto_x25519_public_key(ctx->ep, ctx->e);
 #endif
-    // The first half of the pool will later generate the next pool
-    crypto_wipe(random_seed, 32);
 }
 
 static void kex_locals(crypto_kex_ctx *ctx, const u8 s[32], const u8 sp[32])
