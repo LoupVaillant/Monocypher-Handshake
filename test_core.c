@@ -15,9 +15,15 @@ typedef uint64_t u64;
 ////////////////////
 #include "monocypher.h"
 
-static void keyed_hash(u8 hash[64], const u8 key[64], const u8 *in, size_t size)
+static void kdf0(u8 next[64], const u8 prev[32])
 {
-    crypto_blake2b_general(hash, 64, key, 64, in, size);
+    u8 zero[8] = {0};
+    crypto_chacha20(next, 0, 64, prev, zero);
+}
+
+static void kdf1(u8 next[64], const u8 prev[32], const u8 *in, size_t size)
+{
+    crypto_blake2b_general(next, 64, prev, 32, in, size);
 }
 
 static void public_key(u8 pk[32], const u8 sk[32])
@@ -68,7 +74,6 @@ typedef struct {
 
 typedef struct {
     u8 session_key[32];
-    u8 extra_key  [32];
     u8 remote_key [32];
 } outputs;
 
@@ -193,7 +198,7 @@ static size_t step(crypto_kex_ctx *ctx, outputs *out,
             assert(ctx->flags & IS_OK);
             break;
         case CRYPTO_KEX_FINAL:
-            crypto_kex_final(ctx, out->session_key, out->extra_key);
+            crypto_kex_final(ctx, out->session_key);
             assert(ctx->flags == 0);
             break;
         case CRYPTO_KEX_NONE:
@@ -220,28 +225,16 @@ static void load_pattern(action pattern[4][5], const crypto_kex_ctx *ctx)
 
 static void mix_hash(u8 hash[64], const u8 *in, size_t size)
 {
-    keyed_hash(hash, hash, in, size);
-}
-
-static void split_hash(u8 hash[64], u8 *extra, size_t size)
-{
-    static const u8 zero[1] = {0};
-    static const u8 one [1] = {1};
-    u8 tmp[64];
-    keyed_hash(hash, hash, zero, 1);
-    keyed_hash(tmp , hash, one , 1);
-    memcpy(extra, tmp, size);
+    kdf1(hash, hash, in, size);
 }
 
 static void e_mix_hash(u8 hash[64], const u8 *in, size_t size)
 {
-    static const u8 zero[1] = {0};
-    u8 key[32];
-    u8 tmp[128];
-    split_hash(hash, key, 32);
+    u8 *key = hash + 32;
+    u8  tmp[128];
+    kdf0(hash, hash);            // split an encryption key
     encrypt(tmp, in, size, key);
     mix_hash(hash, tmp , size);  // absorb encrypted message
-    mix_hash(hash, zero, 1   );  // split for authentication tag
 }
 
 static void exchange(u8 hash[64], u8 s1[32], u8 p1[32], u8 s2[32], u8 p2[32])
@@ -303,11 +296,11 @@ static void session_vectors(outputs              *out,
     memcpy(hash, pattern_id, 64);
     if (server->flags & HAS_REMOTE) {
         assert(!memcmp(client->sp, server->sr, 32));
-        keyed_hash(hash, hash, client->sp, 32);
+        kdf1(hash, hash, client->sp, 32);
     }
     if (client->flags & HAS_REMOTE) {
         assert(!memcmp(server->sp, client->sr, 32));
-        keyed_hash(hash, hash, server->sp, 32);
+        kdf1(hash, hash, server->sp, 32);
     }
     assert(!memcmp(client->hash, hash, 64)); // check client initial hash
     assert(!memcmp(server->hash, hash, 64)); // check server initial hash
@@ -344,16 +337,10 @@ static void session_vectors(outputs              *out,
             size_t    size    = in->payload_sizes[i];
             if (has_key) { e_mix_hash(hash, payload, size); }
             else         {   mix_hash(hash, payload, size); }
-        } else {
-            if (has_key) {
-                static const u8 zero[1] = {0};
-                mix_hash(hash, zero, 1);
-            }
         }
     }
 
     memcpy(out->session_key, hash     , 32);
-    memcpy(out->extra_key  , hash + 32, 32);
 }
 
 static void session(outputs              *co, // client out
@@ -439,9 +426,6 @@ static void session_success(size_t msg_sizes[5],     // actual message sizes
     // Sucessful session agrees with the test vectors
     assert(!memcmp(out_client.session_key, vectors->session_key, 32));
     assert(!memcmp(out_server.session_key, vectors->session_key, 32));
-    assert(!memcmp(out_client.  extra_key, vectors->  extra_key, 32));
-    assert(!memcmp(out_server.  extra_key, vectors->  extra_key, 32));
-
 }
 
 

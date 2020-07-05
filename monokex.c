@@ -38,9 +38,14 @@ static const u8 zero[8] = {0};
 ////////////////////
 #include "monocypher.h"
 
-static void keyed_hash(u8 hash[64], const u8 key[64], const u8 *in, size_t size)
+static void kdf0(u8 next[64], const u8 prev[32])
 {
-    crypto_blake2b_general(hash, 64, key, 64, in, size);
+    crypto_chacha20(next, 0, 64, prev, zero);
+}
+
+static void kdf1(u8 next[64], const u8 prev[32], const u8 *in, size_t size)
+{
+    crypto_blake2b_general(next, 64, prev, 32, in, size);
 }
 
 static void ephemeral_key_pair(u8 pk[32], u8 sk[32], u8 seed[32])
@@ -96,14 +101,18 @@ static void wipe(void *buffer, size_t size)
 
 void kex_mix_hash(crypto_kex_ctx *ctx, const u8 *input, size_t input_size)
 {
-    keyed_hash(ctx->hash, ctx->hash, input, input_size);
+    kdf1(ctx->hash, ctx->hash, input, input_size);
 }
 
-static void kex_extra_hash(crypto_kex_ctx *ctx, u8 out[64])
+static void kex_get_key(crypto_kex_ctx *ctx, u8 key[32])
 {
-    u8 one [1] = {1};
-    keyed_hash(ctx->hash, ctx->hash, zero, 1);
-    keyed_hash(out      , ctx->hash,  one, 1);
+    kdf0(ctx->hash, ctx->hash);
+    copy(key, ctx->hash + 32, 32);
+}
+
+static void kex_get_tag(crypto_kex_ctx *ctx, u8 tag[16])
+{
+    copy(tag, ctx->hash + 32, 16);
 }
 
 static void kex_update_key(crypto_kex_ctx *ctx,
@@ -120,17 +129,14 @@ static void kex_update_key(crypto_kex_ctx *ctx,
 static void kex_auth(crypto_kex_ctx *ctx, u8 tag[16])
 {
     if (!(ctx->flags & HAS_KEY)) { return; }
-    u8 tmp[64];
-    kex_extra_hash(ctx, tmp);
-    copy(tag, tmp, 16);
-    WIPE_BUFFER(tmp);
+    kex_get_tag(ctx, tag);
 }
 
 static int kex_verify(crypto_kex_ctx *ctx, const u8 tag[16])
 {
     if (!(ctx->flags & HAS_KEY)) { return 0; }
-    u8 real_tag[64]; // actually 16 useful bytes
-    kex_extra_hash(ctx, real_tag);
+    u8 real_tag[16];
+    kex_get_tag(ctx, real_tag);
     if (verify16(tag, real_tag)) {
         WIPE_CTX(ctx);
         WIPE_BUFFER(real_tag);
@@ -161,8 +167,8 @@ static void kex_write(crypto_kex_ctx *ctx, u8 *msg, const u8 *src, size_t size)
         return;
     }
     // we have a key, we encrypt
-    u8 key[64]; // actually 32 useful bytes
-    kex_extra_hash(ctx, key);
+    u8 key[32];
+    kex_get_key(ctx, key);
     encrypt(msg, src, size, key);
     kex_mix_hash(ctx, msg, size);
     kex_auth(ctx, msg + size);
@@ -176,8 +182,8 @@ static int kex_read(crypto_kex_ctx *ctx, u8 *dest, const u8 *msg, size_t size)
         return 0;
     }
     // we have a key, we decrypt
-    u8 key[64]; // actually 32 useful bytes
-    kex_extra_hash(ctx, key);
+    u8 key[32];
+    kex_get_key(ctx, key);
     kex_mix_hash(ctx, msg, size);
     if (kex_verify(ctx, msg + size)) {
         WIPE_BUFFER(key);
@@ -342,13 +348,10 @@ void crypto_kex_remote_key(crypto_kex_ctx *ctx, u8 key[32])
     ctx->flags &= ~GETS_REMOTE;
 }
 
-void crypto_kex_final(crypto_kex_ctx *ctx, u8 key[32], u8 extra[32])
+void crypto_kex_final(crypto_kex_ctx *ctx, u8 key[32])
 {
     if (crypto_kex_next_action(ctx, 0) == CRYPTO_KEX_FINAL) {
         copy(key, ctx->hash, 32);
-        if (extra != 0) {
-            copy(extra, ctx->hash + 32, 32);
-        }
     }
     WIPE_CTX(ctx);
 }

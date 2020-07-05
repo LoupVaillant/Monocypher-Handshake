@@ -59,11 +59,7 @@ void crypto_kex_add_prelude(crypto_kex_ctx *ctx,
 void crypto_kex_remote_key(crypto_kex_ctx *ctx, uint8_t key[32]);
 
 // Gets the session key and wipes the context.
-// The extra key can be used as a second session key, or as a hash for
-// channel binding.
-void crypto_kex_final(crypto_kex_ctx *ctx,
-                      uint8_t session_key[32],
-                      uint8_t extra_key  [32]);
+void crypto_kex_final(crypto_kex_ctx *ctx, uint8_t session_key[32]);
 
 // Next action to perform. Can be used instead of hard coding everything.
 //
