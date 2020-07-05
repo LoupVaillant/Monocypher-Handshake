@@ -1,12 +1,11 @@
-#include "monocypher.h"
 #include "monokex.h"
 
 /////////////////
 /// Utilities ///
 /////////////////
 #define FOR(i, start, end)  for (size_t i = (start); (i) < (end); (i)++)
-#define WIPE_CTX(ctx)       crypto_wipe(ctx   , sizeof(*(ctx)))
-#define WIPE_BUFFER(buffer) crypto_wipe(buffer, sizeof(buffer))
+#define WIPE_CTX(ctx)       wipe(ctx   , sizeof(*(ctx)))
+#define WIPE_BUFFER(buffer) wipe(buffer, sizeof(buffer))
 
 typedef uint8_t   u8;
 typedef uint16_t u16;
@@ -34,6 +33,62 @@ static void copy(u8 *out, const u8 *in, size_t nb)
 
 static const u8 zero[8] = {0};
 
+////////////////////
+/// Dependencies ///
+////////////////////
+#include "monocypher.h"
+
+static void keyed_hash(u8 hash[64], const u8 key[64], const u8 *in, size_t size)
+{
+    crypto_blake2b_general(hash, 64, key, 64, in, size);
+}
+
+static void ephemeral_key_pair(u8 pk[32], u8 sk[32], u8 seed[32])
+{
+#ifndef DISABLE_ELLIGATOR
+    crypto_hidden_key_pair(pk, sk, seed);
+#else
+    copy(sk, seed, 32);
+    crypto_x25519_public_key(pk, sk);
+#endif
+}
+
+static void static_public_key(u8 pk[32], const u8 sk[32])
+{
+    crypto_x25519_public_key(pk, sk);
+}
+
+// If the key is hidden, unhide them
+static void decode_ephemeral_key(u8 key[32])
+{
+#ifndef DISABLE_ELLIGATOR
+    crypto_hidden_to_curve(key, key);
+#endif
+}
+
+// in == NULL is the same as in == {0, 0, 0, ...}
+static void encrypt(u8 *out, const u8 *in, size_t size, u8 key[32])
+{
+    crypto_chacha20(out, in, size, key, zero);
+}
+
+static void key_exchange(u8 shared_secret[32], const u8 sk[32], const u8 pk[32])
+{
+    crypto_x25519(shared_secret, sk, pk);
+}
+
+// Runs in constant time
+static int verify16(const u8 a[16], const u8 b[16])
+{
+    return crypto_verify16(a, b);
+}
+
+// securely erases memory
+static void wipe(void *buffer, size_t size)
+{
+    crypto_wipe(buffer, size);
+}
+
 /////////////////////
 /// State machine ///
 /////////////////////
@@ -41,14 +96,14 @@ static const u8 zero[8] = {0};
 
 void kex_mix_hash(crypto_kex_ctx *ctx, const u8 *input, size_t input_size)
 {
-    crypto_blake2b_general(ctx->hash, 64, ctx->hash, 64, input, input_size);
+    keyed_hash(ctx->hash, ctx->hash, input, input_size);
 }
 
 static void kex_extra_hash(crypto_kex_ctx *ctx, u8 out[64])
 {
     u8 one [1] = {1};
-    crypto_blake2b_general(ctx->hash, 64, ctx->hash, 64, zero, 1);
-    crypto_blake2b_general(out      , 64, ctx->hash, 64,  one, 1);
+    keyed_hash(ctx->hash, ctx->hash, zero, 1);
+    keyed_hash(out      , ctx->hash,  one, 1);
 }
 
 static void kex_update_key(crypto_kex_ctx *ctx,
@@ -56,7 +111,7 @@ static void kex_update_key(crypto_kex_ctx *ctx,
                            const u8 public_key[32])
 {
     u8 tmp[32];
-    crypto_x25519(tmp, secret_key, public_key);
+    key_exchange(tmp, secret_key, public_key);
     kex_mix_hash(ctx, tmp, 32);
     ctx->flags |= HAS_KEY;
     WIPE_BUFFER(tmp);
@@ -76,7 +131,7 @@ static int kex_verify(crypto_kex_ctx *ctx, const u8 tag[16])
     if (!(ctx->flags & HAS_KEY)) { return 0; }
     u8 real_tag[64]; // actually 16 useful bytes
     kex_extra_hash(ctx, real_tag);
-    if (crypto_verify16(tag, real_tag)) {
+    if (verify16(tag, real_tag)) {
         WIPE_CTX(ctx);
         WIPE_BUFFER(real_tag);
         return -1;
@@ -108,7 +163,7 @@ static void kex_write(crypto_kex_ctx *ctx, u8 *msg, const u8 *src, size_t size)
     // we have a key, we encrypt
     u8 key[64]; // actually 32 useful bytes
     kex_extra_hash(ctx, key);
-    crypto_chacha20(msg, src, size, key, zero);
+    encrypt(msg, src, size, key);
     kex_mix_hash(ctx, msg, size);
     kex_auth(ctx, msg + size);
     WIPE_BUFFER(key);
@@ -128,7 +183,7 @@ static int kex_read(crypto_kex_ctx *ctx, u8 *dest, const u8 *msg, size_t size)
         WIPE_BUFFER(key);
         return -1;
     }
-    crypto_chacha20(dest, msg, size, key, zero);
+    encrypt(dest, msg, size, key);
     WIPE_BUFFER(key);
     return 0;
 }
@@ -161,20 +216,15 @@ static void kex_seed(crypto_kex_ctx *ctx, u8 random_seed[32])
 {
     // Note we only use the second half of the pool for now.
     // The first half will be used later to re-generate the pool.
-    crypto_chacha20(ctx->pool, 0, 64, random_seed, zero);
-    crypto_wipe(random_seed, 32); // auto wipe seed to avoid reuse
-#ifndef DISABLE_ELLIGATOR
-    crypto_hidden_key_pair(ctx->ep, ctx->e, ctx->pool + 32);
-#else
-    copy(ctx->e, ctx->pool + 32, 32);
-    crypto_x25519_public_key(ctx->ep, ctx->e);
-#endif
+    encrypt(ctx->pool, 0, 64, random_seed);
+    wipe(random_seed, 32); // auto wipe seed to avoid reuse
+    ephemeral_key_pair(ctx->ep, ctx->e, ctx->pool + 32);
 }
 
 static void kex_locals(crypto_kex_ctx *ctx, const u8 s[32], const u8 sp[32])
 {
-    if (sp == 0) { crypto_x25519_public_key(ctx->sp, s);      }
-    else         { copy                    (ctx->sp, sp, 32); }
+    if (sp == 0) { static_public_key(ctx->sp, s);      }
+    else         { copy             (ctx->sp, sp, 32); }
     copy(ctx->s, s, 32);
 }
 
@@ -212,17 +262,16 @@ int crypto_kex_read_p(crypto_kex_ctx *ctx,
         switch (kex_next_token(ctx)) {
         case E : kex_read_raw(ctx, ctx->er, m, 32);
                  m += 32;
-#ifndef DISABLE_ELLIGATOR
-                 crypto_hidden_to_curve(ctx->er, ctx->er);
-#endif
+                 decode_ephemeral_key(ctx->er);
                  break;
         case S : if (kex_read(ctx, ctx->sr, m, 32)) { return -1; }
                  m += 32 + tag_size;
-                 ctx->flags |= HAS_REMOTE;                     break;
-        case EE: kex_update_key(ctx, ctx->e, ctx->er);         break;
-        case ES: kex_update_key(ctx, ctx->e, ctx->sr);         break;
-        case SE: kex_update_key(ctx, ctx->s, ctx->er);         break;
-        case SS: kex_update_key(ctx, ctx->s, ctx->sr);         break;
+                 ctx->flags |= HAS_REMOTE;
+                 break;
+        case EE: kex_update_key(ctx, ctx->e, ctx->er); break;
+        case ES: kex_update_key(ctx, ctx->e, ctx->sr); break;
+        case SE: kex_update_key(ctx, ctx->s, ctx->er); break;
+        case SS: kex_update_key(ctx, ctx->s, ctx->sr); break;
         default:; // never happens
         }
     }
@@ -275,8 +324,8 @@ void crypto_kex_write_p(crypto_kex_ctx *ctx,
         // Regenerate the pool with its first half,
         // then use the second half for padding.
         // That way we keep the first half of the pool fresh.
-        crypto_chacha20(ctx->pool, 0, 64, ctx->pool, zero);
-        crypto_chacha20(m, 0, pad_size, ctx->pool + 32, zero);
+        encrypt(ctx->pool, 0, 64, ctx->pool);
+        encrypt(m, 0, pad_size, ctx->pool + 32);
     }
 }
 
@@ -1724,4 +1773,3 @@ void crypto_kex_i1x1_server_init(crypto_kex_ctx *ctx,
     ctx->messages[2] = ES + (SE << 3);
     ctx->messages[3] = 0;
 }
-

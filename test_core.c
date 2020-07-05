@@ -1,5 +1,4 @@
 #include "test_core.h"
-#include "monocypher.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +9,36 @@ typedef uint16_t u16;
 typedef uint64_t u64;
 
 #define FOR(i, start, end) for (size_t i = (start); (i) < (end); (i)++)
+
+////////////////////
+/// Dependencies ///
+////////////////////
+#include "monocypher.h"
+
+static void keyed_hash(u8 hash[64], const u8 key[64], const u8 *in, size_t size)
+{
+    crypto_blake2b_general(hash, 64, key, 64, in, size);
+}
+
+static void public_key(u8 pk[32], const u8 sk[32])
+{
+    crypto_x25519_public_key(pk, sk);
+}
+
+// in == NULL is the same as in == {0, 0, 0, ...}
+static void encrypt(u8 *out, const u8 *in, size_t size, u8 key[32])
+{
+    u8 nonce[8] = {0};
+    crypto_chacha20(out, in, size, key, nonce);
+}
+
+static void key_exchange(u8 shared_secret[32], const u8 sk[32], const u8 pk[32])
+{
+    crypto_x25519(shared_secret, sk, pk);
+}
+////////////////////////
+/// end dependencies ///
+////////////////////////
 
 // Pseudo-random 64 bit number, based on xorshift*
 static u64 rand64()
@@ -191,7 +220,7 @@ static void load_pattern(action pattern[4][5], const crypto_kex_ctx *ctx)
 
 static void mix_hash(u8 hash[64], const u8 *in, size_t size)
 {
-    crypto_blake2b_general(hash, 64, hash, 64, in, size);
+    keyed_hash(hash, hash, in, size);
 }
 
 static void split_hash(u8 hash[64], u8 *extra, size_t size)
@@ -199,18 +228,18 @@ static void split_hash(u8 hash[64], u8 *extra, size_t size)
     static const u8 zero[1] = {0};
     static const u8 one [1] = {1};
     u8 tmp[64];
-    crypto_blake2b_general(hash, 64, hash, 64, zero, 1);
-    crypto_blake2b_general(tmp , 64, hash, 64, one , 1);
+    keyed_hash(hash, hash, zero, 1);
+    keyed_hash(tmp , hash, one , 1);
     memcpy(extra, tmp, size);
 }
 
 static void e_mix_hash(u8 hash[64], const u8 *in, size_t size)
 {
-    static const u8 zero[8] = {0};
+    static const u8 zero[1] = {0};
     u8 key[32];
     u8 tmp[128];
     split_hash(hash, key, 32);
-    crypto_chacha20(tmp, in, size, key, zero);
+    encrypt(tmp, in, size, key);
     mix_hash(hash, tmp , size);  // absorb encrypted message
     mix_hash(hash, zero, 1   );  // split for authentication tag
 }
@@ -218,8 +247,8 @@ static void e_mix_hash(u8 hash[64], const u8 *in, size_t size)
 static void exchange(u8 hash[64], u8 s1[32], u8 p1[32], u8 s2[32], u8 p2[32])
 {
     u8 t1[32], t2[32];
-    crypto_x25519(t1, s1, p2);
-    crypto_x25519(t2, s2, p1);
+    key_exchange(t1, s1, p2);
+    key_exchange(t2, s2, p1);
     assert(!memcmp(t1, t2, 32));
     mix_hash(hash, t1, 32);
 }
@@ -262,10 +291,10 @@ static void session_vectors(outputs              *out,
 
     u8 ces[32], cep[32], ses[32], sep[32];
     u8 css[32], csp[32], sss[32], ssp[32];
-    if (has_ce){memcpy(ces, client->e, 32); crypto_x25519_public_key(cep, ces);}
-    if (has_se){memcpy(ses, server->e, 32); crypto_x25519_public_key(sep, ses);}
-    if (has_cs){memcpy(css, client->s, 32); crypto_x25519_public_key(csp, css);}
-    if (has_ss){memcpy(sss, server->s, 32); crypto_x25519_public_key(ssp, sss);}
+    if (has_ce){memcpy(ces, client->e, 32); public_key(cep, ces);}
+    if (has_se){memcpy(ses, server->e, 32); public_key(sep, ses);}
+    if (has_cs){memcpy(css, client->s, 32); public_key(csp, css);}
+    if (has_ss){memcpy(sss, server->s, 32); public_key(ssp, sss);}
     if (has_cs) { assert(!memcmp(client->sp, csp, 32)); }
     if (has_ss) { assert(!memcmp(server->sp, ssp, 32)); }
 
@@ -274,11 +303,11 @@ static void session_vectors(outputs              *out,
     memcpy(hash, pattern_id, 64);
     if (server->flags & HAS_REMOTE) {
         assert(!memcmp(client->sp, server->sr, 32));
-        crypto_blake2b_general(hash, 64, hash, 64, client->sp, 32);
+        keyed_hash(hash, hash, client->sp, 32);
     }
     if (client->flags & HAS_REMOTE) {
         assert(!memcmp(server->sp, client->sr, 32));
-        crypto_blake2b_general(hash, 64, hash, 64, server->sp, 32);
+        keyed_hash(hash, hash, server->sp, 32);
     }
     assert(!memcmp(client->hash, hash, 64)); // check client initial hash
     assert(!memcmp(server->hash, hash, 64)); // check server initial hash
@@ -431,19 +460,15 @@ void test_pattern(const crypto_kex_ctx *client,
         size_t  msg_sizes[5];     // size of each message in a session
         u8      payloads [4][32]; // transmitted payloads
         session_vectors(&vectors, &in, client, server, pattern_id);
-        session_success(msg_sizes, payloads, client, server, &in, &vectors, 128);
-        session_success(msg_sizes, payloads, client, server, &in, &vectors,   0);
+        session_success(msg_sizes, payloads, client, server, &in, &vectors,128);
+        session_success(msg_sizes, payloads, client, server, &in, &vectors,  0);
 
         // Failing sessions (network corruption)
         FOR (i, 0, 4) {
             if (msg_sizes[i] == 0) {
                 break;
             }
-            // Corrupt last byte of each message block (of 16 bytes).
-            // We chose 16 bytes because it's a divisor of all lengths
-            // except payloads. This guarantee we touch every component
-            // of the handshake, key, tag, or payload.
-            // The paranoid may modify the loop and corrupt every byte.
+            // Corrupt each byte of the message.
             //
             // Note 1: we corrrupt the most significant bit, so we
             // sometimes flip the most significant bit of public keys.
@@ -454,7 +479,7 @@ void test_pattern(const crypto_kex_ctx *client,
             // Note 2: corrupting a payload, even if it is unencrypted,
             // should result in failure: at the end of the handshake,
             // the whole transcript is authenticated.
-            u8     corrupt_with = 128;
+            u8 corrupt_with = 128;
             FOR (corrupt_at, 0, msg_sizes[i]) {
                 outputs out_client;
                 outputs out_server;
