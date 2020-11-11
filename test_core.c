@@ -332,12 +332,10 @@ static void session_vectors(outputs              *out,
             default  : assert(0);
             }
         }
-        if (in->payloads[i]) {
-            const u8 *payload = in->payloads[i];
-            size_t    size    = in->payload_sizes[i];
-            if (has_key) { e_mix_hash(hash, payload, size); }
-            else         {   mix_hash(hash, payload, size); }
-        }
+        const u8 *payload = in->payloads[i];
+        size_t    size    = in->payload_sizes[i];
+        if (has_key) { e_mix_hash(hash, payload, size); }
+        else         {   mix_hash(hash, payload, size); }
     }
 
     memcpy(out->session_key, hash     , 32);
