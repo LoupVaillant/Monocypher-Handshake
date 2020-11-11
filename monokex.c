@@ -99,9 +99,6 @@ void kex_mix_hash(crypto_kex_ctx *ctx, const u8 *input, size_t input_size)
     kdf(ctx->hash, ctx->hash, input, input_size);
 }
 
-static u8* kex_key(crypto_kex_ctx *ctx) { return ctx->hash + 32; }
-static u8* kex_tag(crypto_kex_ctx *ctx) { return ctx->hash + 32; }
-
 static void kex_update_key(crypto_kex_ctx *ctx,
                            const u8 secret_key[32],
                            const u8 public_key[32])
@@ -135,9 +132,9 @@ static void kex_write(crypto_kex_ctx *ctx, u8 *msg, const u8 *src, size_t size)
     }
     // we have a key, we encrypt
     encrypt(ctx->hash, 0, 64, ctx->hash);
-    encrypt(msg, src, size, kex_key(ctx));
+    encrypt(msg, src, size, ctx->hash + 32);
     kex_mix_hash(ctx, msg, size);
-    copy(msg + size, kex_tag(ctx), 16);
+    copy(msg + size, ctx->hash + 32, 16);
 }
 
 static int kex_read(crypto_kex_ctx *ctx, u8 *dest, const u8 *msg, size_t size)
@@ -149,9 +146,9 @@ static int kex_read(crypto_kex_ctx *ctx, u8 *dest, const u8 *msg, size_t size)
     // we have a key, we decrypt
     encrypt(ctx->hash, 0, 64, ctx->hash);
     u8 key[32];
-    copy(key, kex_key(ctx), 32);
+    copy(key, ctx->hash + 32, 32);
     kex_mix_hash(ctx, msg, size);
-    if (verify16(msg + size, kex_tag(ctx))) {
+    if (verify16(msg + size, ctx->hash + 32)) {
         WIPE_CTX(ctx);
         WIPE_BUFFER(key);
         return -1;
