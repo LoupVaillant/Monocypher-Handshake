@@ -38,12 +38,7 @@ static const u8 zero[8] = {0};
 ////////////////////
 #include "monocypher.h"
 
-static void kdf0(u8 next[64], const u8 prev[32])
-{
-    crypto_chacha20(next, 0, 64, prev, zero);
-}
-
-static void kdf1(u8 next[64], const u8 prev[32], const u8 *in, size_t size)
+static void kdf(u8 next[64], const u8 prev[32], const u8 *in, size_t size)
 {
     crypto_blake2b_general(next, 48, prev, 32, in, size);
 }
@@ -101,7 +96,7 @@ static void wipe(void *buffer, size_t size)
 
 void kex_mix_hash(crypto_kex_ctx *ctx, const u8 *input, size_t input_size)
 {
-    kdf1(ctx->hash, ctx->hash, input, input_size);
+    kdf(ctx->hash, ctx->hash, input, input_size);
 }
 
 static u8* kex_key(crypto_kex_ctx *ctx) { return ctx->hash + 32; }
@@ -139,7 +134,7 @@ static void kex_write(crypto_kex_ctx *ctx, u8 *msg, const u8 *src, size_t size)
         return;
     }
     // we have a key, we encrypt
-    kdf0(ctx->hash, ctx->hash);
+    encrypt(ctx->hash, 0, 64, ctx->hash);
     encrypt(msg, src, size, kex_key(ctx));
     kex_mix_hash(ctx, msg, size);
     copy(msg + size, kex_tag(ctx), 16);
@@ -152,7 +147,7 @@ static int kex_read(crypto_kex_ctx *ctx, u8 *dest, const u8 *msg, size_t size)
         return 0;
     }
     // we have a key, we decrypt
-    kdf0(ctx->hash, ctx->hash);
+    encrypt(ctx->hash, 0, 64, ctx->hash);
     u8 key[32];
     copy(key, kex_key(ctx), 32);
     kex_mix_hash(ctx, msg, size);
