@@ -293,7 +293,7 @@ static void session_vectors(outputs              *out,
 
     // Initial hash
     u8 hash[64];
-    memcpy(hash, pattern_id, 64);
+    memcpy(hash, pattern_id, 32);
     if (server->flags & HAS_REMOTE) {
         assert(!memcmp(client->sp, server->sr, 32));
         kdf1(hash, hash, client->sp, 32);
@@ -302,8 +302,8 @@ static void session_vectors(outputs              *out,
         assert(!memcmp(server->sp, client->sr, 32));
         kdf1(hash, hash, server->sp, 32);
     }
-    assert(!memcmp(client->hash, hash, 64)); // check client initial hash
-    assert(!memcmp(server->hash, hash, 64)); // check server initial hash
+    assert(!memcmp(client->hash, hash, 32)); // check client initial hash
+    assert(!memcmp(server->hash, hash, 32)); // check server initial hash
 
     // Prelude
     if (in->prelude) {
