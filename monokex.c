@@ -38,7 +38,7 @@ static const u8 zero[8] = {0};
 ////////////////////
 #include "monocypher.h"
 
-static void kdf(u8 next[64], const u8 prev[32], const u8 *in, size_t size)
+static void kdf(u8 next[48], const u8 prev[32], const u8 *in, size_t size)
 {
     crypto_blake2b_general(next, 48, prev, 32, in, size);
 }
@@ -178,7 +178,7 @@ static void kex_next_message(crypto_kex_ctx *ctx)
 //////////////////////
 static void kex_init(crypto_kex_ctx *ctx, const u8 pid[32])
 {
-    copy(ctx->hash, pid, 64);
+    copy(ctx->hash, pid, 32);
     ctx->flags = IS_OK;
 }
 
